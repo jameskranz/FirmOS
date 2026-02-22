@@ -2,9 +2,9 @@
 
 ## Phase 1: State Management Infrastructure
 - [x] Task: Create `src/state/` directory and implement `BaseStateManager` abstract class. eb62062
-- [ ] Task: Implement `JsonStateManager` for file-based state tracking in `company/state/workflows.json`.
-    - [ ] Write unit tests for state initialization, updates, and retrieval.
-    - [ ] Implement the class logic to pass tests.
+- [x] Task: Implement `JsonStateManager` for file-based state tracking in `company/state/workflows.json`. ba166a7
+    - [x] Write unit tests for state initialization, updates, and retrieval.
+    - [x] Implement the class logic to pass tests.
 - [ ] Task: Conductor - User Manual Verification 'State Management Infrastructure' (Protocol in workflow.md)
 
 ## Phase 2: Intent-Based Handoff Tools
