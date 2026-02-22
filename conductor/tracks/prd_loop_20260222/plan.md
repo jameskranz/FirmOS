@@ -11,8 +11,8 @@
 ## Phase 2: Agent Role Refinement
 - [x] Task: Update `company/roles/hr-director.md` to explicitly handle 'hiring' requests using the tool. 67a8299
     - [x] Verify agent behavior with a mock hiring ticket.
-- [ ] Task: Update/Verify `company/roles/product-manager.md` for PRD drafting capabilities.
-    - [ ] Ensure the PM role understands the tool for saving/updating `prd.md`.
+- [x] Task: Update/Verify `company/roles/product-manager.md` for PRD drafting capabilities. 1188887
+    - [x] Ensure the PM role understands the tool for saving/updating `prd.md`.
 - [ ] Task: Update/Verify a technical role (e.g., `senior-systems-architect.md`) for technical review capabilities.
 - [ ] Task: Conductor - User Manual Verification 'Agent Role Refinement' (Protocol in workflow.md)
 
