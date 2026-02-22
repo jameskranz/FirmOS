@@ -44,3 +44,5 @@
     - [x] PM hands off to Architect via `publish_message`.
     - [x] Architect reads workbook and adds feedback note. 5144fa5
 - [x] Task: Conductor - User Manual Verification 'Abstracted Workbooks' (Protocol in workflow.md) 5144fa5
+- [x] Task: Update `conductor/knowledge_base/good_ticket.md` with implementation learnings.
+- [x] Task: Create `scripts/reset-work.ts` utility.
