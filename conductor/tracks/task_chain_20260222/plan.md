@@ -20,8 +20,8 @@
 - [x] Task: Refactor `src/daemon.ts` to integrate the `StateManager`. a65126c
 - [x] Task: Update the tool execution loop to handle handoff tools. 412ab91
     - [x] Logic: Tool execution -> State update -> RabbitMQ publish to next agent.
-- [ ] Task: Implement "Human Gate" logic for `submit_for_approval`.
-    - [ ] Write integration tests for automated routing between mock agents.
+- [x] Task: Implement "Human Gate" logic for `submit_for_approval`. 412ab91
+    - [x] Write integration tests for automated routing between mock agents.
 - [ ] Task: Conductor - User Manual Verification 'Daemon Orchestration' (Protocol in workflow.md)
 
 ## Phase 4: Role SLA Updates
