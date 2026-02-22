@@ -11,9 +11,9 @@
 - [x] Task: Implement `submit_for_review.ts` tool. f0f9c45
 - [x] Task: Implement `submit_feedback.ts` tool. f86d775
 - [x] Task: Implement `submit_for_approval.ts` tool. 7e3745a
-- [ ] Task: Register new tools in `src/tools/index.ts`.
-    - [ ] Write unit tests for tool definitions and schema validation.
-    - [ ] Ensure tools return meaningful handoff success messages.
+- [x] Task: Register new tools in `src/tools/index.ts`. 9305006
+    - [x] Write unit tests for tool definitions and schema validation.
+    - [x] Ensure tools return meaningful handoff success messages.
 - [ ] Task: Conductor - User Manual Verification 'Intent-Based Tools' (Protocol in workflow.md)
 
 ## Phase 3: Daemon Orchestration & Routing
