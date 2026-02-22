@@ -8,8 +8,8 @@
 - [x] Task: Conductor - User Manual Verification 'State Management Infrastructure' (Protocol in workflow.md) 339efa1
 
 ## Phase 2: Intent-Based Handoff Tools
-- [ ] Task: Implement `submit_for_review.ts` tool.
-- [ ] Task: Implement `submit_feedback.ts` tool.
+- [x] Task: Implement `submit_for_review.ts` tool. f0f9c45
+- [x] Task: Implement `submit_feedback.ts` tool. f86d775
 - [ ] Task: Implement `submit_for_approval.ts` tool.
 - [ ] Task: Register new tools in `src/tools/index.ts`.
     - [ ] Write unit tests for tool definitions and schema validation.
