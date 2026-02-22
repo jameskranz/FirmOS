@@ -1,0 +1,4 @@
+{
+  "role": "senior-systems-architect",
+  "prompt": "REVIEW TASK: Please provide a technical review for the 'Departmental Multi-Queue' feature. \\n\\nINSTRUCTION: \\n1. Use 'read_feature_work' to read the current workbook content. \\n2. Use 'add_feature_note' to add a section 'Technical Assessment'. Address the feasibility of distinct queues and any RabbitMQ routing concerns. \\n\\nDo not output conversational text."
+}

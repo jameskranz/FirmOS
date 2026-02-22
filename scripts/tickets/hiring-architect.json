@@ -1,0 +1,4 @@
+{
+  "role": "hr-director",
+  "prompt": "HIRE TASK: You must hire a 'senior-systems-architect'. Use the hire_agent tool. \\n\\nROLE DETAILS: The Senior Systems Architect translates feature ideas into rigorous, scalable technical architectures. They specialize in Node.js, RabbitMQ, and AI integration. \\n\\nKEY RESPONSIBILITY: They must generate technical RFCs for developers. AND they must be able to review PRDs (prd.md) for technical feasibility and architectural alignment, providing actionable feedback. \\n\\nINSTRUCTION: Output the full Markdown SLA for this role using the hire_agent tool with roleName='senior-systems-architect'. Do not output any other text."
+}

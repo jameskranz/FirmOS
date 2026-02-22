@@ -1,0 +1,4 @@
+{
+  "role": "product-manager",
+  "prompt": "WORK TASK: Start a new feature iteration for 'Departmental Multi-Queue'. \\n\\nINSTRUCTION: \\n1. Use 'initialize_feature_work' to create the workbook. \\n2. Use 'add_feature_note' to add an 'Initial Proposal' section. Propose using distinct RabbitMQ queues for each department role (e.g., hr_tasks, engineering_tasks). \\n3. Use 'publish_message' to hand off this work to the 'senior-systems-architect' for a technical review. Direct them to read the 'Departmental Multi-Queue' workbook. \\n\\nDo not output conversational text."
+}

@@ -2,9 +2,10 @@ import amqp from 'amqplib';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { GoogleGenerativeAI, SchemaType } from '@google/generative-ai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import type { Tool } from '@google/generative-ai';
 import dotenv from 'dotenv';
+import { firmOsTools, allTools } from './tools/index.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -20,52 +21,53 @@ if (!apiKey) {
 const genAI = new GoogleGenerativeAI(apiKey.trim().replace(/\r/g, '')); 
 const QUEUE_NAME = 'task_routing';
 const ERROR_QUEUE = 'error_tasks';
+const PID_FILE = path.join(__dirname, '..', 'daemon.pid');
 
-// ==========================================
-// 🛠️ TOOL DEFINITIONS
-// ==========================================
-const firmOsTools: Tool = {
-    functionDeclarations: [
-        {
-            name: "save_file",
-            description: "Saves text or markdown content to a specified file path relative to the FirmOS project root. Use this to update code and documentation.",
-            parameters: {
-                type: SchemaType.OBJECT,
-                properties: {
-                    relativePath: {
-                        type: SchemaType.STRING,
-                        description: "The relative path to save the file, e.g., 'src/components/Button.tsx' or 'prd.md'"
-                    },
-                    content: {
-                        type: SchemaType.STRING,
-                        description: "The complete, raw content to be written to the file."
-                    }
-                },
-                required: ["relativePath", "content"]
-            }
-        },
-        {
-            name: "hire_agent",
-            description: "Creates a new corporate role (agent) by saving its Markdown SLA to the company/roles/ directory. Only use this when explicitly asked to hire someone.",
-            parameters: {
-                type: SchemaType.OBJECT,
-                properties: {
-                    roleName: {
-                        type: SchemaType.STRING,
-                        description: "The name of the role in kebab-case, e.g., 'backend-developer' or 'qa-engineer'."
-                    },
-                    slaContent: {
-                        type: SchemaType.STRING,
-                        description: "The complete Markdown SLA content for the new agent, including its identity, responsibilities, and tool guidelines."
-                    }
-                },
-                required: ["roleName", "slaContent"]
-            }
+async function checkSingleton() {
+    try {
+        const pid = await fs.readFile(PID_FILE, 'utf8');
+        try {
+            process.kill(parseInt(pid, 10), 0);
+            console.error(`❌ FATAL: Another daemon instance is already running (PID: ${pid}).`);
+            process.exit(1);
+        } catch (e) {
+            // Process not running, we can take over
         }
-    ]
-};
+    } catch (e) {
+        // PID file doesn't exist
+    }
+    await fs.writeFile(PID_FILE, process.pid.toString());
+    
+    // Cleanup PID file on exit
+    const cleanup = async () => {
+        try { await fs.unlink(PID_FILE); } catch (e) {}
+        process.exit();
+    };
+    process.on('SIGINT', cleanup);
+    process.on('SIGTERM', cleanup);
+}
+
+/**
+ * Generates a Markdown documentation block from the Tool definitions.
+ * This is injected into agent prompts so they always know what tools are available.
+ */
+function generateToolDocumentation(tools: Tool): string {
+    let doc = "# PLATFORM CAPABILITIES (AUTO-INJECTED)\n\n";
+    doc += "You operate in a tool-enabled environment. The following function calls are available to you:\n\n";
+    
+    tools.functionDeclarations?.forEach(fn => {
+        doc += `## Tool: ${fn.name}\n`;
+        doc += `Description: ${fn.description}\n`;
+        doc += "Parameters (JSON Schema):\n";
+        doc += `\`\`\`json\n${JSON.stringify(fn.parameters, null, 2)}\n\`\`\`\n\n`;
+    });
+
+    doc += "---\n\n";
+    return doc;
+}
 
 export async function startDaemon() {
+    await checkSingleton();
     try {
         const connection = await amqp.connect('amqp://localhost');
         const channel = await connection.createChannel();
@@ -73,8 +75,9 @@ export async function startDaemon() {
         await channel.assertQueue(QUEUE_NAME, { durable: true });
         await channel.assertQueue(ERROR_QUEUE, { durable: true });
         
+        const toolNames = firmOsTools.functionDeclarations?.map(f => f.name).join(', ') || 'none';
         console.log(`👂 FirmOS Orchestrator listening... [Model: gemini-2.5-flash]`);
-        console.log(`🛠️  Tools loaded: [save_file]`);
+        console.log(`🛠️  Tools loaded: [${toolNames}]`);
 
         channel.consume(QUEUE_NAME, async (msg) => {
             if (!msg) return;
@@ -85,63 +88,80 @@ export async function startDaemon() {
             try {
                 console.log(`\n📥 Task Received: [${role}]`);
                 const rolePath = path.join(__dirname, '..', 'company', 'roles', `${role}.md`);
-                const systemInstruction = await fs.readFile(rolePath, 'utf8');
+                const fileContent = await fs.readFile(rolePath, 'utf8');
+                
+                // Inject dynamic tool documentation
+                const toolDoc = generateToolDocumentation(firmOsTools);
+                const systemInstruction = toolDoc + fileContent;
+
+                console.log(`📖 Loaded SLA for [${role}] (${fileContent.length} chars) + injected tool docs.`);
 
                 console.log(`🧠 Thinking...`);
                 
-                // Pass the tools array into the model configuration
                 const model = genAI.getGenerativeModel({ 
                     model: 'gemini-2.5-flash', 
                     systemInstruction: systemInstruction,
                     tools: [firmOsTools] 
                 });
 
-                const result = await model.generateContent(prompt);
-                const response = result.response;
-                
-                console.log(`✅ Agent Response Received.`);
+                const chat = model.startChat();
+                let currentPrompt: string | Array<any> = prompt;
+                let loopCount = 0;
+                const MAX_LOOPS = 5;
 
-                // ==========================================
-                // ⚙️ TOOL EXECUTION ENGINE
-                // ==========================================
-                const functionCalls = response.functionCalls();
-                
-                if (functionCalls && functionCalls.length > 0) {
+                while (loopCount < MAX_LOOPS) {
+                    loopCount++;
+                    const result = await chat.sendMessage(currentPrompt);
+                    const response = result.response;
+                    const functionCalls = response.functionCalls();
+
+                    if (!functionCalls || functionCalls.length === 0) {
+                        const text = response.text();
+                        if (text && text.trim()) {
+                            console.log(`📝 Text Output:\n${text}`);
+                        } else if (loopCount === 1) {
+                            console.log(`⚠️  Empty response received from model.`);
+                        }
+                        break; // Exit loop if no more tool calls
+                    }
+
+                    console.log(`🔧 [Loop ${loopCount}/${MAX_LOOPS}] Executing ${functionCalls.length} tool call(s)...`);
+                    const toolResponses: any[] = [];
+
                     for (const call of functionCalls) {
-                        if (call.name === 'save_file') {
-                            const args = call.args as { relativePath: string, content: string };
-                            let { relativePath, content } = args;
-                            
-                            // Safety fallback if the agent forgets the directory for a role
-                            if (role === 'hr-director' && !relativePath.includes('/')) {
-                                relativePath = `company/roles/${relativePath}`;
+                        const tool = allTools.find(t => t.definition.name === call.name);
+                        if (tool) {
+                            try {
+                                const toolResult = await tool.execute(call.args);
+                                toolResponses.push({
+                                    functionResponse: {
+                                        name: call.name,
+                                        response: { content: toolResult || "Success" }
+                                    }
+                                });
+                            } catch (err: any) {
+                                console.error(`❌ Error executing ${call.name}:`, err.message);
+                                toolResponses.push({
+                                    functionResponse: {
+                                        name: call.name,
+                                        response: { error: err.message }
+                                    }
+                                });
                             }
-
-                            const fullOutputPath = path.resolve(__dirname, '..', relativePath);
-                            
-                            await fs.mkdir(path.dirname(fullOutputPath), { recursive: true });
-                            await fs.writeFile(fullOutputPath, content.replace(/\r/g, ''));
-                            
-                            console.log(`🛠️  Executed Tool: save_file -> 📂 ${relativePath}`);
-                        } else if (call.name === 'hire_agent') {
-                            const args = call.args as { roleName: string, slaContent: string };
-                            const { roleName, slaContent } = args;
-                            
-                            // Enforce role placement in company/roles/
-                            const relativePath = `company/roles/${roleName.replace('.md', '')}.md`;
-                            const fullOutputPath = path.resolve(__dirname, '..', relativePath);
-                            
-                            await fs.mkdir(path.dirname(fullOutputPath), { recursive: true });
-                            await fs.writeFile(fullOutputPath, slaContent.replace(/\r/g, ''));
-                            
-                            console.log(`🤝 Executed Tool: hire_agent -> 👤 hired [${roleName}]`);
+                        } else {
+                            console.error(`⚠️  Unknown tool requested: ${call.name}`);
                         }
                     }
-                } else {
-                    // Fallback if the agent just talks instead of using a tool
-                    console.log(`📝 Text Output:\n${response.text()}`);
+
+                    // Feed tool results back for the next turn
+                    currentPrompt = toolResponses;
                 }
 
+                if (loopCount >= MAX_LOOPS) {
+                    console.warn(`⚠️  Micro-loop hit MAX_LOOPS (${MAX_LOOPS})`);
+                }
+
+                console.log(`🏁 Task Completed: [${role}]`);
                 channel.ack(msg);
             } catch (error: any) {
                 console.error(`❌ Error:`, error.message);

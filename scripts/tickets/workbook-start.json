@@ -1,0 +1,4 @@
+{
+  "role": "product-manager",
+  "prompt": "WORKBOOK TASK: Create a new feature workbook for 'Departmental Multi-Queue'. \\n\\nINSTRUCTION: \\n1. Use 'save_file' to create 'company/work/queue-feature.md' with a detailed proposal for the feature. \\n2. After saving the file, use 'publish_message' to hand off this workbook to the 'senior-systems-architect' for a technical review. Mention the file path in your handoff prompt. \\n\\nDo not output conversational text."
+}

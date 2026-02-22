@@ -4,5 +4,5 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ---
 
-- [ ] **Track: Automated Task Chains and Feedback Loops**
+- [~] **Track: Automated Task Chains and Feedback Loops**
   *Link: [./tracks/task_chain_20260222/](./tracks/task_chain_20260222/)*

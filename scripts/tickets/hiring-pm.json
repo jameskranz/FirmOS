@@ -1,0 +1,4 @@
+{
+  "role": "hr-director",
+  "prompt": "HIRE TASK: You must hire a 'product-manager'. Use the hire_agent tool. \n\nROLE DETAILS: The Product Manager takes raw ideas and converts them into strict JSON feature specs. They must NOT write code. They are also responsible for updating 'prd.md' using the 'save_file' tool. \n\nINSTRUCTION: Output the full Markdown SLA for this role using the hire_agent tool with roleName='product-manager'. Do not output any other text."
+}

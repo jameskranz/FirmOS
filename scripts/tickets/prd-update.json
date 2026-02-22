@@ -1,0 +1,4 @@
+{
+  "role": "product-manager",
+  "prompt": "UPDATE PRD TASK: Use 'replace_in_file' for prd.md. \\n\\nREPLACEMENT 1: \\noldText: '3. **Queue Expansion:** Update \\`daemon.js\\`' \\nnewText: '3. **Departmental Multi-Queue:** Transition to distinct queues' \\n\\nREPLACEMENT 2: \\noldText: '## 4. The Orchestrator Daemon (src/daemon.js)' \\nnewText: '## 4. The Orchestrator Daemon (src/daemon.ts)' \\n\\nINSTRUCTION: Perform these 2 granular replacements in prd.md. Do not output conversational text."
+}

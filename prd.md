@@ -36,7 +36,7 @@ Agents interact with the environment exclusively through strict JSON schema func
 - **`read_file`**: Returns the text content of a specified relative path.
 - **`list_directory`**: Returns an array of files and folders at a specified relative path.
 
-## 4. The Orchestrator Daemon (src/daemon.js)
+## 4. The Orchestrator Daemon (src/daemon.ts)
 The heart of FirmOS. Its responsibilities are:
 
 1. Connect to RabbitMQ (`task_routing` and `error_tasks` queues).
@@ -62,4 +62,4 @@ Every agent in `company/roles/` MUST adhere to a strict structure. They are esse
 
 1. **Verify the Engine:** Run the daemon locally and use the HR Director to hire the `backend-architect.md` using the `save_file` tool.
 2. **Test File Reading:** Create a dummy project spec (`docs/raw-idea.txt`). Issue a ticket to the Architect to `read_file` on the raw idea, and `save_file` an architecture document.
-3. **Queue Expansion:** Update `daemon.js` to handle multiple distinct queues (e.g., `hr_queue`, `engineering_queue`) instead of a single `task_routing` queue, allowing for true asynchronous department handoffs.
+3. **Departmental Multi-Queue:** Transition to distinct queues to handle multiple distinct queues (e.g., `hr_queue`, `engineering_queue`) instead of a single `task_routing` queue, allowing for true asynchronous department handoffs.

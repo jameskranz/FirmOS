@@ -1,0 +1,4 @@
+{
+  "role": "senior-systems-architect",
+  "prompt": "REVIEW TASK: Please perform a technical review of the current prd.md file. \\n\\nFOCUS: Specifically look at the new 'Departmental Multi-Queue' feature. Is it feasible? What are the risks with RabbitMQ routing? \\n\\nINSTRUCTION: Provide actionable feedback. Use the 'replace_in_file' tool to insert a new section '### Technical Review Feedback' at the end of the PRD with your assessment. Do not output conversational text."
+}
