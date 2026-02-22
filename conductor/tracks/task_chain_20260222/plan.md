@@ -7,14 +7,14 @@
     - [x] Implement the class logic to pass tests.
 - [x] Task: Conductor - User Manual Verification 'State Management Infrastructure' (Protocol in workflow.md) 339efa1
 
-## Phase 2: Intent-Based Handoff Tools
+## Phase 2: Intent-Based Handoff Tools [checkpoint: 342fc12]
 - [x] Task: Implement `submit_for_review.ts` tool. f0f9c45
 - [x] Task: Implement `submit_feedback.ts` tool. f86d775
 - [x] Task: Implement `submit_for_approval.ts` tool. 7e3745a
 - [x] Task: Register new tools in `src/tools/index.ts`. 9305006
     - [x] Write unit tests for tool definitions and schema validation.
     - [x] Ensure tools return meaningful handoff success messages.
-- [ ] Task: Conductor - User Manual Verification 'Intent-Based Tools' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Intent-Based Tools' (Protocol in workflow.md) 342fc12
 
 ## Phase 3: Daemon Orchestration & Routing
 - [ ] Task: Refactor `src/daemon.ts` to integrate the `StateManager`.
