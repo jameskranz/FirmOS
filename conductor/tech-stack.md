@@ -1,12 +1,13 @@
 # FirmOS: Technology Stack
 
 ## Core Language & Runtime
-- **JavaScript (Node.js):** The primary runtime for the FirmOS orchestrator.
+- **TypeScript:** The primary language for the FirmOS orchestrator.
+- **Node.js:** The execution environment for the orchestrator.
 - **ES Modules (ESM):** Modern module system (`type: module` in `package.json`).
 
 ## AI & Orchestration
-- **Google Gemini SDK (`@google/generative-ai`):** The core intelligence engine for all agent personas.
-- **Gemini 2.0 Flash (Preview):** The default model for high-speed, cost-efficient reasoning.
+- **Google Gemini SDK (`@google/generative-ai`):** The core intelligence engine with full TypeScript support.
+- **Gemini 2.5 Flash:** The default model for high-speed, cost-efficient reasoning.
 - **Native Tool Calling:** Leverages Gemini's function-calling capabilities for direct environment interaction.
 
 ## Communication & Messaging
