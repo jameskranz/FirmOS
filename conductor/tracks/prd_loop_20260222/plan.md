@@ -7,6 +7,7 @@
     - [x] Write failing test for the `save_file` tool variant specifically for hiring (e.g., path restriction).
     - [x] Update `src/daemon.ts` to support explicit 'hiring' signals or role creation logic if needed.
 - [x] Task: Create `scripts/reset-roles.ts` utility.
+- [x] Task: Create `scripts/purge-queue.ts` utility.
 - [x] Task: Conductor - User Manual Verification 'Infrastructure and Knowledge Base' (Protocol in workflow.md) c23ea98
 
 ## Phase 2: Agent Role Refinement
@@ -16,10 +17,10 @@
 - [x] Task: Conductor - User Manual Verification 'Agent Role Refinement' (Protocol in workflow.md) d3388c3
 
 ## Phase 3: Loop Validation (Manual Simulation)
-- [~] Task: Execute a 'hiring' loop to update 'product-manager' capabilities.
-    - [ ] Manually draft hiring JSON ticket for PM.
-    - [ ] Publish via `npm run publish` and verify role update.
-- [ ] Task: Execute a 'hiring' loop to update 'senior-systems-architect' capabilities.
+- [x] Task: Execute a 'hiring' loop to update 'product-manager' capabilities. 7f3ac37
+    - [x] Manually draft hiring JSON ticket for PM.
+    - [x] Publish via `npm run publish` and verify role update.
+- [~] Task: Execute a 'hiring' loop to update 'senior-systems-architect' capabilities.
     - [ ] Manually draft hiring JSON ticket for Architect.
     - [ ] Publish and verify role update.
 - [ ] Task: Execute a 'PRD Drafting' loop.
