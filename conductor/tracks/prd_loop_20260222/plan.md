@@ -15,7 +15,7 @@
 - [x] Task: Conductor - User Manual Verification 'Agent Role Refinement' (Protocol in workflow.md) d3388c3
 
 ## Phase 3: Loop Validation (Manual Simulation)
-- [ ] Task: Execute a 'hiring' loop to update 'product-manager' capabilities.
+- [~] Task: Execute a 'hiring' loop to update 'product-manager' capabilities.
     - [ ] Manually draft hiring JSON ticket for PM.
     - [ ] Publish via `npm run publish` and verify role update.
 - [ ] Task: Execute a 'hiring' loop to update 'senior-systems-architect' capabilities.
