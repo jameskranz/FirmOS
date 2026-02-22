@@ -17,7 +17,7 @@
 - [x] Task: Conductor - User Manual Verification 'Intent-Based Tools' (Protocol in workflow.md) 342fc12
 
 ## Phase 3: Daemon Orchestration & Routing
-- [ ] Task: Refactor `src/daemon.ts` to integrate the `StateManager`.
+- [x] Task: Refactor `src/daemon.ts` to integrate the `StateManager`. a65126c
 - [ ] Task: Update the tool execution loop to handle handoff tools.
     - [ ] Logic: Tool execution -> State update -> RabbitMQ publish to next agent.
 - [ ] Task: Implement "Human Gate" logic for `submit_for_approval`.
