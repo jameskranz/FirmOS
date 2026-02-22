@@ -3,9 +3,9 @@
 ## Phase 1: Infrastructure and Knowledge Base
 - [x] Task: Create `conductor/knowledge_base/` directory and `good_ticket.md`. 2405f44
     - [x] Initialize `good_ticket.md` with the current 'Macro-Loop' JSON schema examples.
-- [ ] Task: Implement/Refine 'hiring' tool logic in `src/daemon.ts`.
-    - [ ] Write failing test for the `save_file` tool variant specifically for hiring (e.g., path restriction).
-    - [ ] Update `src/daemon.ts` to support explicit 'hiring' signals or role creation logic if needed.
+- [x] Task: Implement/Refine 'hiring' tool logic in `src/daemon.ts`. 8c465af
+    - [x] Write failing test for the `save_file` tool variant specifically for hiring (e.g., path restriction).
+    - [x] Update `src/daemon.ts` to support explicit 'hiring' signals or role creation logic if needed.
 - [ ] Task: Conductor - User Manual Verification 'Infrastructure and Knowledge Base' (Protocol in workflow.md)
 
 ## Phase 2: Agent Role Refinement
