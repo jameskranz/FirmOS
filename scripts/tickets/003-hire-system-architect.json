@@ -1,0 +1,4 @@
+{
+  "role": "hr-director",
+  "prompt": "Hire a Senior Systems Architect. Their job is to read raw feature ideas and design strict, highly technical backend architectures, focusing on message queues, node.js, and AI tool schemas. They should output technical RFCs for developers."
+}
