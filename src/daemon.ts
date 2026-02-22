@@ -7,6 +7,7 @@ import type { Tool } from '@google/generative-ai';
 import dotenv from 'dotenv';
 import { firmOsTools, allTools } from './tools/index.ts';
 import { JsonStateManager } from './state/json.ts';
+import { HandoffManager } from './utils/handoff-manager.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -26,6 +27,7 @@ const PID_FILE = path.join(__dirname, '..', 'daemon.pid');
 const STATE_FILE = path.join(__dirname, '..', 'company', 'state', 'workflows.json');
 
 const stateManager = new JsonStateManager(STATE_FILE);
+const handoffManager = new HandoffManager();
 
 async function checkSingleton() {
     try {
@@ -143,6 +145,49 @@ export async function startDaemon() {
                                         response: { content: toolResult || "Success" }
                                     }
                                 });
+
+                                // Check for specialized tool effects
+                                if (call.name === 'initialize_feature_work') {
+                                    const slug = call.args.featureName.toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').trim();
+                                    await stateManager.initializeWorkflow({
+                                        featureId: slug,
+                                        featureName: call.args.featureName,
+                                        currentAgent: role,
+                                        status: 'drafting',
+                                        workbookPath: `company/work/${slug}.md`
+                                    });
+                                    console.log(`✨ [State] Initialized tracking for feature '${slug}'.`);
+                                }
+
+                                // Check for handoff intent
+                                const handoffConfig = handoffManager.getHandoffConfig(call.name);
+                                if (handoffConfig) {
+                                    const { featureId } = call.args;
+                                    const nextPrompt = handoffConfig.promptTemplate(call.args);
+                                    
+                                    console.log(`📡 [Handoff] Routing feature '${featureId}' to ${handoffConfig.targetRole}...`);
+                                    
+                                    // 1. Update State
+                                    await stateManager.updateWorkflow(featureId, {
+                                        currentAgent: handoffConfig.targetRole,
+                                        status: handoffConfig.nextStatus
+                                    }, {
+                                        timestamp: new Date().toISOString(),
+                                        fromAgent: role,
+                                        toAgent: handoffConfig.targetRole,
+                                        action: call.name,
+                                        note: call.args.note || call.args.feedback
+                                    });
+
+                                    // 2. Publish next task (if not human gate)
+                                    if (handoffConfig.targetRole !== 'human') {
+                                        const payload = JSON.stringify({ role: handoffConfig.targetRole, prompt: nextPrompt });
+                                        channel.sendToQueue(QUEUE_NAME, Buffer.from(payload), { persistent: true });
+                                        console.log(`🚀 [Handoff] Published task for ${handoffConfig.targetRole}.`);
+                                    } else {
+                                        console.log(`🛑 [Handoff] Workflow paused for human approval.`);
+                                    }
+                                }
                             } catch (err: any) {
                                 console.error(`❌ Error executing ${call.name}:`, err.message);
                                 toolResponses.push({

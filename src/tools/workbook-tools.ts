@@ -46,7 +46,7 @@ Created: ${new Date().toISOString()}
         
         await fs.writeFile(filePath, initialContent);
         console.log(`📝 Initialized workbook: ${slug}.md`);
-        return `Workbook initialized at company/work/${slug}.md`;
+        return `SUCCESS: Workbook initialized. featureId='${slug}', path='company/work/${slug}.md'`;
     }
 }
 
