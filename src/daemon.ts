@@ -28,13 +28,13 @@ const firmOsTools: Tool = {
     functionDeclarations: [
         {
             name: "save_file",
-            description: "Saves text or markdown content to a specified file path relative to the FirmOS project root. Use this to create or update roles, code, and documentation.",
+            description: "Saves text or markdown content to a specified file path relative to the FirmOS project root. Use this to update code and documentation.",
             parameters: {
                 type: SchemaType.OBJECT,
                 properties: {
                     relativePath: {
                         type: SchemaType.STRING,
-                        description: "The relative path to save the file, e.g., 'company/roles/frontend-developer.md' or 'src/components/Button.jsx'"
+                        description: "The relative path to save the file, e.g., 'src/components/Button.tsx' or 'prd.md'"
                     },
                     content: {
                         type: SchemaType.STRING,
@@ -42,6 +42,24 @@ const firmOsTools: Tool = {
                     }
                 },
                 required: ["relativePath", "content"]
+            }
+        },
+        {
+            name: "hire_agent",
+            description: "Creates a new corporate role (agent) by saving its Markdown SLA to the company/roles/ directory. Only use this when explicitly asked to hire someone.",
+            parameters: {
+                type: SchemaType.OBJECT,
+                properties: {
+                    roleName: {
+                        type: SchemaType.STRING,
+                        description: "The name of the role in kebab-case, e.g., 'backend-developer' or 'qa-engineer'."
+                    },
+                    slaContent: {
+                        type: SchemaType.STRING,
+                        description: "The complete Markdown SLA content for the new agent, including its identity, responsibilities, and tool guidelines."
+                    }
+                },
+                required: ["roleName", "slaContent"]
             }
         }
     ]
@@ -105,6 +123,18 @@ export async function startDaemon() {
                             await fs.writeFile(fullOutputPath, content.replace(/\r/g, ''));
                             
                             console.log(`🛠️  Executed Tool: save_file -> 📂 ${relativePath}`);
+                        } else if (call.name === 'hire_agent') {
+                            const args = call.args as { roleName: string, slaContent: string };
+                            const { roleName, slaContent } = args;
+                            
+                            // Enforce role placement in company/roles/
+                            const relativePath = `company/roles/${roleName.replace('.md', '')}.md`;
+                            const fullOutputPath = path.resolve(__dirname, '..', relativePath);
+                            
+                            await fs.mkdir(path.dirname(fullOutputPath), { recursive: true });
+                            await fs.writeFile(fullOutputPath, slaContent.replace(/\r/g, ''));
+                            
+                            console.log(`🤝 Executed Tool: hire_agent -> 👤 hired [${roleName}]`);
                         }
                     }
                 } else {
