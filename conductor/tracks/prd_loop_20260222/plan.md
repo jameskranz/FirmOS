@@ -1,8 +1,8 @@
 # Implementation Plan: PRD Iteration and Hiring Loop
 
 ## Phase 1: Infrastructure and Knowledge Base
-- [ ] Task: Create `conductor/knowledge_base/` directory and `good_ticket.md`.
-    - [ ] Initialize `good_ticket.md` with the current 'Macro-Loop' JSON schema examples.
+- [x] Task: Create `conductor/knowledge_base/` directory and `good_ticket.md`. 2405f44
+    - [x] Initialize `good_ticket.md` with the current 'Macro-Loop' JSON schema examples.
 - [ ] Task: Implement/Refine 'hiring' tool logic in `src/daemon.ts`.
     - [ ] Write failing test for the `save_file` tool variant specifically for hiring (e.g., path restriction).
     - [ ] Update `src/daemon.ts` to support explicit 'hiring' signals or role creation logic if needed.
