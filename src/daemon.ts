@@ -6,6 +6,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import type { Tool } from '@google/generative-ai';
 import dotenv from 'dotenv';
 import { firmOsTools, allTools } from './tools/index.ts';
+import { JsonStateManager } from './state/json.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -22,6 +23,9 @@ const genAI = new GoogleGenerativeAI(apiKey.trim().replace(/\r/g, ''));
 const QUEUE_NAME = 'task_routing';
 const ERROR_QUEUE = 'error_tasks';
 const PID_FILE = path.join(__dirname, '..', 'daemon.pid');
+const STATE_FILE = path.join(__dirname, '..', 'company', 'state', 'workflows.json');
+
+const stateManager = new JsonStateManager(STATE_FILE);
 
 async function checkSingleton() {
     try {
