@@ -4,5 +4,5 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ---
 
-- [ ] **Track: PRD Iteration and Hiring Loop**
+- [~] **Track: PRD Iteration and Hiring Loop**
   *Link: [./tracks/prd_loop_20260222/](./tracks/prd_loop_20260222/)*
