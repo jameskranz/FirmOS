@@ -1,0 +1,37 @@
+{
+  "name": "firmos",
+  "version": "1.0.0",
+  "description": "",
+  "main": "dist/src/daemon.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/src/daemon.js",
+    "dev": "ts-node --esm src/daemon.ts",
+    "publish": "ts-node --esm scripts/publish.ts",
+    "test": "node tests/config.test.js && node tests/styleguide.test.js && node tests/scripts.test.js && ts-node --esm tests/daemon.test.ts && ts-node --esm tests/publish.test.ts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jameskranz/FirmOS.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/jameskranz/FirmOS/issues"
+  },
+  "homepage": "https://github.com/jameskranz/FirmOS#readme",
+  "dependencies": {
+    "@google/genai": "^1.42.0",
+    "@google/generative-ai": "^0.24.1",
+    "amqplib": "^0.10.9",
+    "dotenv": "^17.3.1"
+  },
+  "devDependencies": {
+    "@types/amqplib": "^0.10.8",
+    "@types/node": "^25.3.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3"
+  }
+}
