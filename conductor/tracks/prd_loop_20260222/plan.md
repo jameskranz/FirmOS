@@ -42,5 +42,5 @@
 - [x] Task: Execute a multi-agent 'Abstracted Workbook' loop. 5393c0e
     - [x] PM initializes workbook and adds draft note.
     - [x] PM hands off to Architect via `publish_message`.
-    - [x] Architect reads workbook and adds feedback note.
-- [x] Task: Conductor - User Manual Verification 'Abstracted Workbooks' (Protocol in workflow.md) 5393c0e
+    - [x] Architect reads workbook and adds feedback note. 5144fa5
+- [x] Task: Conductor - User Manual Verification 'Abstracted Workbooks' (Protocol in workflow.md) 5144fa5
