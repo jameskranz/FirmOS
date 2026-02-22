@@ -6,6 +6,7 @@
 - [x] Task: Implement/Refine 'hiring' tool logic in `src/daemon.ts`. 8c465af
     - [x] Write failing test for the `save_file` tool variant specifically for hiring (e.g., path restriction).
     - [x] Update `src/daemon.ts` to support explicit 'hiring' signals or role creation logic if needed.
+- [x] Task: Create `scripts/reset-roles.ts` utility.
 - [x] Task: Conductor - User Manual Verification 'Infrastructure and Knowledge Base' (Protocol in workflow.md) c23ea98
 
 ## Phase 2: Agent Role Refinement

@@ -8,6 +8,7 @@
     "start": "node dist/src/daemon.js",
     "dev": "ts-node --esm src/daemon.ts",
     "publish": "ts-node --esm scripts/publish.ts",
+    "reset-roles": "ts-node --esm scripts/reset-roles.ts",
     "test": "node tests/config.test.js && node tests/styleguide.test.js && node tests/scripts.test.js && ts-node --esm tests/daemon.test.ts && ts-node --esm tests/publish.test.ts"
   },
   "repository": {
