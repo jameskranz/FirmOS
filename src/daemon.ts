@@ -235,10 +235,24 @@ async function processTask(role: string, prompt: string, modelOverride?: string,
     } catch (error: any) {
         console.error(`❌ Error:`, error.message);
         
-        const isFatal = error.message.includes('not found') || 
-                       error.message.includes('401') || 
+        const isFatal = error.message.includes('401') || 
                        error.message.includes('403') ||
-                       error.code === 'ENOENT';
+                       error.code === 'EACCES';
+
+        if (error.code === 'ENOENT' || error.message.includes('not found')) {
+            console.log(`⚠️  Role [${role}] not found. Routing to [recruiter] for dynamic hiring.`);
+            const recruitmentPrompt = `The system attempted to task the role '${role}', but no SLA for this role was found. 
+            
+Original Task intended for '${role}':
+${prompt}
+
+Please identify the gap, define the requirements for '${role}', and task the HR Director to hire them.`;
+            
+            const recoveryPayload = JSON.stringify({ role: 'recruiter', prompt: recruitmentPrompt });
+            await amqpChannel!.sendToQueue(QUEUE_NAME, Buffer.from(recoveryPayload), { persistent: true });
+            if (originalMsg) amqpChannel!.ack(originalMsg);
+            return;
+        }
 
         if (isFatal) {
             await amqpChannel!.sendToQueue(ERROR_QUEUE, Buffer.from(JSON.stringify({ payload, error: error.message })), { persistent: true });
