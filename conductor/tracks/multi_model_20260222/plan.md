@@ -1,11 +1,11 @@
 # Implementation Plan: Multi-Model Orchestration
 
-## Phase 1: Model Registry & Resolution
+## Phase 1: Model Registry & Resolution [checkpoint: 98dae17]
 - [x] Task: Create `company/models.json` to store role-to-model mappings. d072416
 - [x] Task: Implement a model resolution utility in `src/utils/model-resolver.ts`. d76eb20
     - [x] Write tests for resolution hierarchy (Ticket Override > Registry > Default).
     - [x] Implement the resolver class to pass tests.
-- [ ] Task: Conductor - User Manual Verification 'Model Registry' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Model Registry' (Protocol in workflow.md) 98dae17
 
 ## Phase 2: Daemon Refactoring & Fallback
 - [ ] Task: Update `src/daemon.ts` to use the dynamic model resolver.
