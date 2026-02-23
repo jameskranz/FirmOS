@@ -8,9 +8,10 @@
     "start": "node dist/src/daemon.js",
     "dev": "ts-node --esm src/daemon.ts",
     "publish": "ts-node --esm scripts/publish.ts",
-    "reset-roles": "ts-node --esm scripts/reset-roles.ts",
-    "reset-work": "ts-node --esm scripts/reset-work.ts",
-    "purge-queue": "ts-node --esm scripts/purge-queue.ts",
+    "publish:external": "ts-node --esm scripts/publish-external.ts",
+    "reset:roles": "ts-node --esm scripts/reset-roles.ts",
+    "reset:work": "ts-node --esm scripts/reset-work.ts",
+    "purge:queue": "ts-node --esm scripts/purge-queue.ts",
     "test": "node tests/config.test.js && node tests/styleguide.test.js && node tests/scripts/package-scripts.test.js && ts-node --esm tests/daemon.test.ts && ts-node --esm tests/tools/index.test.ts"
   },
   "repository": {
