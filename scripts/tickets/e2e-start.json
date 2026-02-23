@@ -1,0 +1,4 @@
+{
+  "role": "product-manager",
+  "prompt": "WORK TASK: Start a new feature iteration for 'Cross-Agent Context Sharing'. \\n\\nINSTRUCTION: \\n1. Use 'initialize_feature_work' to create the workbook. \\n2. Use 'add_feature_note' to add an 'Initial Draft' section. Propose a shared JSON file in 'company/state/context.json' where agents can write high-level summaries of their progress for other agents to read. \\n3. Use 'submit_for_review' to hand off this work to the 'senior-systems-architect' for a technical assessment. \\n\\nDo not output conversational text."
+}

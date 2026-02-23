@@ -29,6 +29,32 @@ const STATE_FILE = path.join(__dirname, '..', 'company', 'state', 'workflows.jso
 const stateManager = new JsonStateManager(STATE_FILE);
 const handoffManager = new HandoffManager();
 
+let amqpConnection: amqp.Connection | null = null;
+let amqpChannel: amqp.Channel | null = null;
+let isProcessing = false;
+
+async function shutdown() {
+    console.log('\n🏁 Shutting down daemon...');
+    
+    // Wait for current task to finish if processing
+    if (isProcessing) {
+        console.log('⏳ Waiting for active task to complete...');
+        let waitCount = 0;
+        while (isProcessing && waitCount < 10) {
+            await new Promise(r => setTimeout(r, 1000));
+            waitCount++;
+        }
+    }
+
+    try {
+        if (amqpChannel) await amqpChannel.close();
+        if (amqpConnection) await amqpConnection.close();
+        await fs.unlink(PID_FILE).catch(() => {});
+        console.log('🛑 Daemon halted safely.');
+    } catch (e) {}
+    process.exit(0);
+}
+
 async function checkSingleton() {
     try {
         const pid = await fs.readFile(PID_FILE, 'utf8');
@@ -44,13 +70,8 @@ async function checkSingleton() {
     }
     await fs.writeFile(PID_FILE, process.pid.toString());
     
-    // Cleanup PID file on exit
-    const cleanup = async () => {
-        try { await fs.unlink(PID_FILE); } catch (e) {}
-        process.exit();
-    };
-    process.on('SIGINT', cleanup);
-    process.on('SIGTERM', cleanup);
+    process.on('SIGINT', shutdown);
+    process.on('SIGTERM', shutdown);
 }
 
 /**
@@ -75,18 +96,19 @@ function generateToolDocumentation(tools: Tool): string {
 export async function startDaemon() {
     await checkSingleton();
     try {
-        const connection = await amqp.connect('amqp://localhost');
-        const channel = await connection.createChannel();
+        amqpConnection = await amqp.connect('amqp://localhost');
+        amqpChannel = await amqpConnection.createChannel();
         
-        await channel.assertQueue(QUEUE_NAME, { durable: true });
-        await channel.assertQueue(ERROR_QUEUE, { durable: true });
+        await amqpChannel.assertQueue(QUEUE_NAME, { durable: true });
+        await amqpChannel.assertQueue(ERROR_QUEUE, { durable: true });
         
         const toolNames = firmOsTools.functionDeclarations?.map(f => f.name).join(', ') || 'none';
         console.log(`👂 FirmOS Orchestrator listening... [Model: gemini-2.5-flash]`);
         console.log(`🛠️  Tools loaded: [${toolNames}]`);
 
-        channel.consume(QUEUE_NAME, async (msg) => {
+        amqpChannel.consume(QUEUE_NAME, async (msg) => {
             if (!msg) return;
+            isProcessing = true;
             const contentString = msg.content.toString();
             const payload = JSON.parse(contentString);
             const { role, prompt } = payload;
@@ -182,7 +204,7 @@ export async function startDaemon() {
                                     // 2. Publish next task (if not human gate)
                                     if (handoffConfig.targetRole !== 'human') {
                                         const payload = JSON.stringify({ role: handoffConfig.targetRole, prompt: nextPrompt });
-                                        channel.sendToQueue(QUEUE_NAME, Buffer.from(payload), { persistent: true });
+                                        amqpChannel!.sendToQueue(QUEUE_NAME, Buffer.from(payload), { persistent: true });
                                         console.log(`🚀 [Handoff] Published task for ${handoffConfig.targetRole}.`);
                                     } else {
                                         console.log(`🛑 [Handoff] Workflow paused for human approval.`);
@@ -211,7 +233,7 @@ export async function startDaemon() {
                 }
 
                 console.log(`🏁 Task Completed: [${role}]`);
-                channel.ack(msg);
+                amqpChannel!.ack(msg);
             } catch (error: any) {
                 console.error(`❌ Error:`, error.message);
                 
@@ -221,11 +243,13 @@ export async function startDaemon() {
                                error.code === 'ENOENT';
 
                 if (isFatal) {
-                    await channel.sendToQueue(ERROR_QUEUE, Buffer.from(JSON.stringify({ payload, error: error.message })), { persistent: true });
-                    channel.ack(msg);
+                    await amqpChannel!.sendToQueue(ERROR_QUEUE, Buffer.from(JSON.stringify({ payload, error: error.message })), { persistent: true });
+                    amqpChannel!.ack(msg);
                 } else {
-                    setTimeout(() => channel.nack(msg), 10000);
+                    setTimeout(() => amqpChannel!.nack(msg), 10000);
                 }
+            } finally {
+                isProcessing = false;
             }
         });
     } catch (error) {

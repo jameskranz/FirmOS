@@ -1,0 +1,4 @@
+{
+  "role": "hr-director",
+  "prompt": "HIRE TASK: Re-hire the 'senior-systems-architect' with updated capabilities. \\n\\nUPDATED RESPONSIBILITIES: The Senior Systems Architect must now use the 'submit_feedback' tool to return technical assessments or architectural feedback to the Product Manager. \\n\\nINSTRUCTION: Output the full Markdown SLA using the hire_agent tool with roleName='senior-systems-architect'. Ensure the agent knows to use this specific intent-based tool for returning feedback in the loop."
+}

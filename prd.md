@@ -60,6 +60,14 @@ Every agent in `company/roles/` MUST adhere to a strict structure. They are esse
 
 ## 6. Development Roadmap (Next Steps for CLI)
 
+## 7. Proposed Features
+
+### A. Handoff Test
+*   **Description:** A foundational feature to test the end-to-end workflow of feature definition and architectural handoff within the FirmOS environment. This verifies the Product Manager's ability to initialize a feature, add content, and submit for review.
+*   **Status:** Pending Architectural Review - Awaiting detailed review of the updated feature workbook.
+
+
+
 1. **Verify the Engine:** Run the daemon locally and use the HR Director to hire the `backend-architect.md` using the `save_file` tool.
 2. **Test File Reading:** Create a dummy project spec (`docs/raw-idea.txt`). Issue a ticket to the Architect to `read_file` on the raw idea, and `save_file` an architecture document.
 3. **Departmental Multi-Queue:** Transition to distinct queues to handle multiple distinct queues (e.g., `hr_queue`, `engineering_queue`) instead of a single `task_routing` queue, allowing for true asynchronous department handoffs.
