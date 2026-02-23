@@ -11,6 +11,8 @@
     "publish:external": "ts-node --esm scripts/publish-external.ts",
     "reset:roles": "ts-node --esm scripts/reset-roles.ts",
     "reset:work": "ts-node --esm scripts/reset-work.ts",
+    "reset:tickets": "ts-node --esm scripts/reset-tickets.ts",
+    "reset:all": "npm run reset:roles && npm run reset:work && npm run reset:tickets && npm run purge:queue",
     "purge:queue": "ts-node --esm scripts/purge-queue.ts",
     "test": "node tests/config.test.js && node tests/styleguide.test.js && node tests/scripts/package-scripts.test.js && ts-node --esm tests/daemon.test.ts && ts-node --esm tests/tools/index.test.ts"
   },

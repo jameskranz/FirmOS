@@ -16,6 +16,7 @@ import { ListRolesTool } from './list-roles.js';
 import { RequestHireTool } from './request-hire.js';
 import { SubmitReviewResultTool } from './submit-review-result.js';
 import { ReviewArtifactTool } from './review-artifact.js';
+import { CreateTicketTool, AssignTicketTool, UpdateTicketTool, ListTicketsTool } from './ticket-tools.js';
 import type { Tool } from '@google/generative-ai';
 
 export const allTools = [
@@ -34,7 +35,11 @@ export const allTools = [
     new ListRolesTool(),
     new RequestHireTool(),
     new SubmitReviewResultTool(),
-    new ReviewArtifactTool()
+    new ReviewArtifactTool(),
+    new CreateTicketTool(),
+    new AssignTicketTool(),
+    new UpdateTicketTool(),
+    new ListTicketsTool()
 ];
 
 export const firmOsTools: Tool = {
@@ -56,3 +61,4 @@ export * from './list-roles.js';
 export * from './request-hire.js';
 export * from './submit-review-result.js';
 export * from './review-artifact.js';
+export * from './ticket-tools.js';

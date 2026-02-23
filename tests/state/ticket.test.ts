@@ -8,14 +8,17 @@ import { JsonStateManager } from '../../src/state/json.ts';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const STATE_FILE = path.resolve(__dirname, '../../company/state/workflows.json');
+const TICKETS_FILE = path.resolve(__dirname, '../../company/state/tickets.json');
 
 async function testTicketSchema() {
     console.log('Running ticket.test.ts');
 
     // Cleanup before test
     try { await fs.unlink(STATE_FILE); } catch (e) {}
+    try { await fs.unlink(TICKETS_FILE); } catch (e) {}
     try { await fs.mkdir(path.dirname(STATE_FILE), { recursive: true }); } catch (e) {}
     await fs.writeFile(STATE_FILE, '{}');
+    await fs.writeFile(TICKETS_FILE, '{}');
 
     const manager = new JsonStateManager(STATE_FILE);
 
@@ -61,6 +64,7 @@ async function testTicketSchema() {
 
     // Cleanup after test
     try { await fs.unlink(STATE_FILE); } catch (e) {}
+    try { await fs.unlink(TICKETS_FILE); } catch (e) {}
 }
 
 testTicketSchema().catch(err => {

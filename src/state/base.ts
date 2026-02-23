@@ -19,9 +19,28 @@ export interface WorkflowState {
     updatedAt: string;
 }
 
+export interface Ticket {
+    id: string;
+    parentId: string | null;
+    title: string;
+    description: string;
+    requirements?: string;
+    status: 'Open' | 'In Progress' | 'Blocked' | 'Done';
+    assignedRole?: string;
+    outputArtifact?: string;
+    created: string;
+    updated: string;
+}
+
 export abstract class BaseStateManager {
     abstract initializeWorkflow(state: Omit<WorkflowState, 'history' | 'updatedAt'>): Promise<void>;
     abstract updateWorkflow(featureId: string, updates: Partial<Omit<WorkflowState, 'featureId' | 'history'>>, historyEntry?: WorkflowHistoryEntry): Promise<void>;
     abstract getWorkflow(featureId: string): Promise<WorkflowState | null>;
     abstract listWorkflows(): Promise<WorkflowState[]>;
+
+    // Ticket Management
+    abstract createTicket(ticket: Omit<Ticket, 'id' | 'created' | 'updated' | 'status'>): Promise<string>;
+    abstract updateTicket(ticketId: string, updates: Partial<Omit<Ticket, 'id' | 'created'>>): Promise<void>;
+    abstract getTicket(ticketId: string): Promise<Ticket | null>;
+    abstract listTickets(parentId: string | null): Promise<Ticket[]>;
 }
