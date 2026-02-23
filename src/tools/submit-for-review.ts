@@ -25,6 +25,10 @@ export class SubmitForReviewTool extends BaseTool {
                     note: {
                         type: SchemaType.STRING,
                         description: "Optional note or summary for the reviewer."
+                    },
+                    targetRole: {
+                        type: SchemaType.STRING,
+                        description: "Optional: The specific role that should review this feature (e.g., 'architect/review' or 'security/audit'). Defaults to 'architect/review'."
                     }
                 },
                 required: ["featureId", "featureName", "workbookPath"]
@@ -32,8 +36,8 @@ export class SubmitForReviewTool extends BaseTool {
         };
     }
 
-    async execute(args: { featureId: string, featureName: string, workbookPath: string, note?: string }): Promise<string> {
+    async execute(args: { featureId: string, featureName: string, workbookPath: string, note?: string, targetRole?: string }): Promise<string> {
         console.log(`🚀 Intent: submit_for_review -> Feature: ${args.featureName} (${args.featureId})`);
-        return `SUCCESS: Feature '${args.featureName}' has been submitted for technical review. The loop will now route to the Senior Systems Architect.`;
+        return `SUCCESS: Feature '${args.featureName}' has been submitted for technical review${args.targetRole ? ` to [${args.targetRole}]` : ''}. The loop will now route accordingly.`;
     }
 }

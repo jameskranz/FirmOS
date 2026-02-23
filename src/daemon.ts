@@ -180,7 +180,7 @@ async function processTask(role: string, prompt: string, modelOverride?: string,
                         }
 
                         // Check for handoff intent
-                        const handoffConfig = handoffManager.getHandoffConfig(call.name);
+                        const handoffConfig = handoffManager.getHandoffConfig(call.name, call.args);
                         if (handoffConfig) {
                             const { featureId } = call.args;
                             const nextPrompt = handoffConfig.promptTemplate(call.args);

@@ -9,7 +9,7 @@ export interface HandoffConfig {
 export class HandoffManager {
     private configs: Record<string, HandoffConfig> = {
         'submit_for_review': {
-            targetRole: 'senior-systems-architect',
+            targetRole: 'architect/review',
             nextStatus: 'reviewing',
             promptTemplate: (args) => `REVIEW REQUEST: Please review the feature '${args.featureName}' (${args.featureId}). 
 
@@ -18,7 +18,7 @@ Workbook: ${args.workbookPath}
 Note: ${args.note || 'No additional notes provided.'}`
         },
         'submit_feedback': {
-            targetRole: 'product-manager',
+            targetRole: 'product/define',
             nextStatus: 'revising',
             promptTemplate: (args) => `FEEDBACK RECEIVED: Technical feedback has been submitted for feature '${args.featureId}'. 
 
@@ -37,7 +37,18 @@ Summary: ${args.note || 'Ready for review.'}`
         }
     };
 
-    getHandoffConfig(toolName: string): HandoffConfig | null {
-        return this.configs[toolName] || null;
+    getHandoffConfig(toolName: string, args?: any): HandoffConfig | null {
+        const config = this.configs[toolName];
+        if (!config) return null;
+
+        // If a targetRole is explicitly provided in the tool arguments, override the default
+        if (args && args.targetRole) {
+            return {
+                ...config,
+                targetRole: args.targetRole
+            };
+        }
+
+        return config;
     }
 }

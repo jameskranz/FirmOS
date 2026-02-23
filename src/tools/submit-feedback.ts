@@ -17,6 +17,10 @@ export class SubmitFeedbackTool extends BaseTool {
                     feedback: {
                         type: SchemaType.STRING,
                         description: "The detailed technical feedback or assessment."
+                    },
+                    targetRole: {
+                        type: SchemaType.STRING,
+                        description: "Optional: The specific role that should receive the feedback (e.g., 'product-manager' or 'engineering-lead'). Defaults to 'product/define'."
                     }
                 },
                 required: ["featureId", "feedback"]
@@ -24,8 +28,8 @@ export class SubmitFeedbackTool extends BaseTool {
         };
     }
 
-    async execute(args: { featureId: string, feedback: string }): Promise<string> {
+    async execute(args: { featureId: string, feedback: string, targetRole?: string }): Promise<string> {
         console.log(`🚀 Intent: submit_feedback -> Feature: ${args.featureId}`);
-        return `SUCCESS: Feedback for feature '${args.featureId}' has been submitted. The loop will now route back to the Product Manager for revisions.`;
+        return `SUCCESS: Feedback for feature '${args.featureId}' has been submitted${args.targetRole ? ` to [${args.targetRole}]` : ''}. The loop will now route accordingly.`;
     }
 }
