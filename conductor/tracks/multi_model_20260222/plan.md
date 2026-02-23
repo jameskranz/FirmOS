@@ -2,9 +2,9 @@
 
 ## Phase 1: Model Registry & Resolution
 - [x] Task: Create `company/models.json` to store role-to-model mappings. d072416
-- [ ] Task: Implement a model resolution utility in `src/utils/model-resolver.ts`.
-    - [ ] Write tests for resolution hierarchy (Ticket Override > Registry > Default).
-    - [ ] Implement the resolver class to pass tests.
+- [x] Task: Implement a model resolution utility in `src/utils/model-resolver.ts`. d76eb20
+    - [x] Write tests for resolution hierarchy (Ticket Override > Registry > Default).
+    - [x] Implement the resolver class to pass tests.
 - [ ] Task: Conductor - User Manual Verification 'Model Registry' (Protocol in workflow.md)
 
 ## Phase 2: Daemon Refactoring & Fallback
