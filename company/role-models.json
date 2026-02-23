@@ -1,9 +1,5 @@
 {
   "hr-director": "MAX",
-  "default": "MEDIUM",
-  "product/manager": "MEDIUM",
-  "architect/review": "HIGH",
-  "system/loop-monitor": "LOW",
-  "test-agent": "MEDIUM",
-  "test-role-1": "gemini-3-pro"
+  "intake-consultant": "MEDIUM",
+  "default": "MEDIUM"
 }
