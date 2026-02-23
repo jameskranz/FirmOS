@@ -16,5 +16,5 @@
 
 ## Phase 3: Integration & Documentation
 - [x] Task: Update `tech-stack.md` to document the multi-model architecture and supported tiers. d61a326
-- [ ] Task: Perform end-to-end validation with a multi-model chain (e.g. Architect on Pro, PM on Flash).
-- [ ] Task: Conductor - User Manual Verification 'Integration & Documentation' (Protocol in workflow.md)
+- [x] Task: Perform end-to-end validation with a multi-model chain (e.g. Architect on Pro, PM on Flash). b25f490
+- [x] Task: Conductor - User Manual Verification 'Integration & Documentation' (Protocol in workflow.md) b25f490

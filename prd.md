@@ -66,6 +66,10 @@ Every agent in `company/roles/` MUST adhere to a strict structure. They are esse
 *   **Description:** A foundational feature to test the end-to-end workflow of feature definition and architectural handoff within the FirmOS environment. This verifies the Product Manager's ability to initialize a feature, add content, and submit for review.
 *   **Status:** Pending Architectural Review - Awaiting detailed review of the updated feature workbook.
 
+### B. Cross-Agent Context Sharing
+*   **Description:** This feature enables the seamless sharing of context and data between different AI agents within the FirmOS ecosystem, improving collaboration and reducing redundant processing.
+*   **Status:** Initial Requirements Drafted - Awaiting Architectural Review.
+
 
 
 1. **Verify the Engine:** Run the daemon locally and use the HR Director to hire the `backend-architect.md` using the `save_file` tool.
