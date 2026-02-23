@@ -24,6 +24,7 @@ if (!apiKey) {
 
 const genAI = new GoogleGenerativeAI(apiKey.trim().replace(/\r/g, '')); 
 const QUEUE_NAME = 'task_routing';
+const EXTERNAL_QUEUE = 'external_requests';
 const ERROR_QUEUE = 'error_tasks';
 const PID_FILE = path.join(__dirname, '..', 'daemon.pid');
 const STATE_FILE = path.join(__dirname, '..', 'company', 'state', 'workflows.json');
@@ -35,6 +36,220 @@ const modelResolver = new ModelResolver(path.join(__dirname, '..', 'company', 'r
 let amqpConnection: amqp.Connection | null = null;
 let amqpChannel: amqp.Channel | null = null;
 let isProcessing = false;
+
+async function processTask(role: string, prompt: string, modelOverride?: string, originalMsg?: amqp.ConsumeMessage) {
+    isProcessing = true;
+    const payload = { role, prompt, model: modelOverride };
+
+    try {
+        const modelName = await modelResolver.resolve(role, modelOverride);
+        console.log(`\n📥 Task Received: [${role}] (Model: ${modelName})`);
+        
+        // SLA Resolution Hierarchy:
+        // 1. Hierarchical (e.g. company/roles/architect/design.md)
+        // 2. Legacy/Flat (e.g. company/roles/senior-systems-architect.md)
+        let rolePath = path.join(__dirname, '..', 'company', 'roles', `${role}.md`);
+        if (role.includes('/')) {
+            const familyTaskPath = path.join(__dirname, '..', 'company', 'roles', `${role}.md`);
+            try {
+                await fs.access(familyTaskPath);
+                rolePath = familyTaskPath;
+            } catch {
+                // If role/task.md doesn't exist, check if the family has a base SLA
+                const familyBase = path.join(__dirname, '..', 'company', 'roles', `${role.split('/')[0]}.md`);
+                try {
+                    await fs.access(familyBase);
+                    rolePath = familyBase;
+                } catch {
+                    // Keep default rolePath and let it fail if not found
+                }
+            }
+        }
+
+        const fileContent = await fs.readFile(rolePath, 'utf8');
+        
+        // Inject dynamic tool documentation
+        const toolDoc = generateToolDocumentation(firmOsTools);
+        const systemInstruction = toolDoc + fileContent;
+
+        console.log(`📖 Loaded SLA for [${role}] (${fileContent.length} chars) + injected tool docs.`);
+
+        console.log(`🧠 Thinking...`);
+        
+        let model;
+        try {
+            model = genAI.getGenerativeModel({ 
+                model: modelName, 
+                systemInstruction: systemInstruction,
+                tools: [firmOsTools] 
+            });
+        } catch (err: any) {
+            console.log(`🔍 Model initialization error: ${err.message}`);
+            if (modelName !== 'gemini-2.5-flash') {
+                console.log(`⚠️  Fallback to default model (gemini-2.5-flash) due to error: ${err.message}`);
+                model = genAI.getGenerativeModel({ 
+                    model: 'gemini-2.5-flash', 
+                    systemInstruction: systemInstruction,
+                    tools: [firmOsTools] 
+                });
+            } else {
+                throw err;
+            }
+        }
+
+        const chat = model.startChat();
+        let currentPrompt: string | Array<any> = prompt;
+        let loopCount = 0;
+        let maxLoops = 5;
+        const loopMonitorModelName = await modelResolver.resolve('system/loop-monitor');
+        const loopMonitor = new LoopMonitor(genAI, loopMonitorModelName);
+
+        while (loopCount < maxLoops) {
+            loopCount++;
+            let result;
+            try {
+                result = await chat.sendMessage(currentPrompt);
+            } catch (err: any) {
+                console.log(`🔍 Runtime error in micro-loop: ${err.message}`);
+                if (loopCount === 1 && modelName !== 'gemini-2.5-flash') {
+                    console.log(`⚠️  Fallback to default model (gemini-2.5-flash) due to runtime error: ${err.message}`);
+                    const fallbackModel = genAI.getGenerativeModel({ 
+                        model: 'gemini-2.5-flash', 
+                        systemInstruction: systemInstruction,
+                        tools: [firmOsTools] 
+                    });
+                    const fallbackChat = fallbackModel.startChat();
+                    result = await fallbackChat.sendMessage(prompt);
+                } else {
+                    throw err;
+                }
+            }
+            const response = result.response;
+            const functionCalls = response.functionCalls();
+
+            if (!functionCalls || functionCalls.length === 0) {
+                const text = response.text();
+                if (text && text.trim()) {
+                    console.log(`📝 Text Output:\n${text}`);
+                } else if (loopCount === 1) {
+                    console.log(`⚠️  Empty response received from model.`);
+                }
+                break; // Exit loop if no more tool calls
+            }
+
+            console.log(`🔧 [Loop ${loopCount}/${maxLoops}] Executing ${functionCalls.length} tool call(s)...`);
+            
+            // Check if we are approaching the limit and might need an extension
+            if (loopCount === maxLoops && maxLoops < 15) {
+                console.log(`👁️‍🗨️  Analyzing loop progress...`);
+                const history = await chat.getHistory();
+                const status = await loopMonitor.analyze(history);
+                if (status === 'PROGRESSING') {
+                    console.log(`🚀 LoopMonitor detected progress. Extending limit (+5).`);
+                    maxLoops += 5;
+                } else {
+                    console.log(`🛑 LoopMonitor detected a STUCK state. Halting.`);
+                }
+            }
+
+            const toolResponses: any[] = [];
+
+            for (const call of functionCalls) {
+                const tool = allTools.find(t => t.definition.name === call.name);
+                if (tool) {
+                    try {
+                        const toolResult = await tool.execute(call.args);
+                        toolResponses.push({
+                            functionResponse: {
+                                name: call.name,
+                                response: { content: toolResult || "Success" }
+                            }
+                        });
+
+                        // Check for specialized tool effects
+                        if (call.name === 'initialize_feature_work') {
+                            const slug = call.args.featureName.toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').trim();
+                            await stateManager.initializeWorkflow({
+                                featureId: slug,
+                                featureName: call.args.featureName,
+                                currentAgent: role,
+                                status: 'drafting',
+                                workbookPath: `company/work/${slug}.md`
+                            });
+                            console.log(`✨ [State] Initialized tracking for feature '${slug}'.`);
+                        }
+
+                        // Check for handoff intent
+                        const handoffConfig = handoffManager.getHandoffConfig(call.name);
+                        if (handoffConfig) {
+                            const { featureId } = call.args;
+                            const nextPrompt = handoffConfig.promptTemplate(call.args);
+                            
+                            console.log(`📡 [Handoff] Routing feature '${featureId}' to ${handoffConfig.targetRole}...`);
+                            
+                            // 1. Update State
+                            await stateManager.updateWorkflow(featureId, {
+                                currentAgent: handoffConfig.targetRole,
+                                status: handoffConfig.nextStatus
+                            }, {
+                                timestamp: new Date().toISOString(),
+                                fromAgent: role,
+                                toAgent: handoffConfig.targetRole,
+                                action: call.name,
+                                note: call.args.note || call.args.feedback
+                            });
+
+                            // 2. Publish next task (if not human gate)
+                            if (handoffConfig.targetRole !== 'human') {
+                                const payload = JSON.stringify({ role: handoffConfig.targetRole, prompt: nextPrompt });
+                                amqpChannel!.sendToQueue(QUEUE_NAME, Buffer.from(payload), { persistent: true });
+                                console.log(`🚀 [Handoff] Published task for ${handoffConfig.targetRole}.`);
+                            } else {
+                                console.log(`🛑 [Handoff] Workflow paused for human approval.`);
+                            }
+                        }
+                    } catch (err: any) {
+                        console.error(`❌ Error executing ${call.name}:`, err.message);
+                        toolResponses.push({
+                            functionResponse: {
+                                name: call.name,
+                                response: { error: err.message }
+                            }
+                        });
+                    }
+                } else {
+                    console.error(`⚠️  Unknown tool requested: ${call.name}`);
+                }
+            }
+
+            // Feed tool results back for the next turn
+            currentPrompt = toolResponses;
+        }
+
+        if (loopCount >= maxLoops) {
+            console.warn(`⚠️  Micro-loop hit maxLoops (${maxLoops})`);
+        }
+
+        console.log(`🏁 Task Completed: [${role}]`);
+        if (originalMsg) amqpChannel!.ack(originalMsg);
+    } catch (error: any) {
+        console.error(`❌ Error:`, error.message);
+        
+        const isFatal = error.message.includes('not found') || 
+                       error.message.includes('401') || 
+                       error.message.includes('403') ||
+                       error.code === 'ENOENT';
+
+        if (isFatal) {
+            await amqpChannel!.sendToQueue(ERROR_QUEUE, Buffer.from(JSON.stringify({ payload, error: error.message })), { persistent: true });
+            if (originalMsg) amqpChannel!.ack(originalMsg);
+        } else {
+            if (originalMsg) setTimeout(() => amqpChannel!.nack(originalMsg), 10000);
+        }
+    } finally {
+        isProcessing = false;
+    }
+}
 
 async function shutdown() {
     console.log('\n🏁 Shutting down daemon...');
@@ -103,228 +318,29 @@ export async function startDaemon() {
         amqpChannel = await amqpConnection.createChannel();
         
         await amqpChannel.assertQueue(QUEUE_NAME, { durable: true });
+        await amqpChannel.assertQueue(EXTERNAL_QUEUE, { durable: true });
         await amqpChannel.assertQueue(ERROR_QUEUE, { durable: true });
         
         const toolNames = firmOsTools.functionDeclarations?.map(f => f.name).join(', ') || 'none';
         console.log(`👂 FirmOS Orchestrator listening... [Model: gemini-2.5-flash]`);
         console.log(`🛠️  Tools loaded: [${toolNames}]`);
 
+        // 1. Internal Task Queue
         amqpChannel.consume(QUEUE_NAME, async (msg) => {
             if (!msg) return;
-            isProcessing = true;
             const contentString = msg.content.toString();
             const payload = JSON.parse(contentString);
-            const { role, prompt, model: modelOverride } = payload;
-
-            try {
-                const modelName = await modelResolver.resolve(role, modelOverride);
-                console.log(`\n📥 Task Received: [${role}] (Model: ${modelName})`);
-                
-                // SLA Resolution Hierarchy:
-                // 1. Hierarchical (e.g. company/roles/architect/design.md)
-                // 2. Legacy/Flat (e.g. company/roles/senior-systems-architect.md)
-                let rolePath = path.join(__dirname, '..', 'company', 'roles', `${role}.md`);
-                if (role.includes('/')) {
-                    const familyTaskPath = path.join(__dirname, '..', 'company', 'roles', `${role}.md`);
-                    try {
-                        await fs.access(familyTaskPath);
-                        rolePath = familyTaskPath;
-                    } catch {
-                        // If role/task.md doesn't exist, check if the family has a base SLA
-                        const familyBase = path.join(__dirname, '..', 'company', 'roles', `${role.split('/')[0]}.md`);
-                        try {
-                            await fs.access(familyBase);
-                            rolePath = familyBase;
-                        } catch {
-                            // Keep default rolePath and let it fail if not found
-                        }
-                    }
-                }
-
-                const fileContent = await fs.readFile(rolePath, 'utf8');
-                
-                // Inject dynamic tool documentation
-                const toolDoc = generateToolDocumentation(firmOsTools);
-                const systemInstruction = toolDoc + fileContent;
-
-                console.log(`📖 Loaded SLA for [${role}] (${fileContent.length} chars) + injected tool docs.`);
-
-                console.log(`🧠 Thinking...`);
-                
-                let model;
-                try {
-                    model = genAI.getGenerativeModel({ 
-                        model: modelName, 
-                        systemInstruction: systemInstruction,
-                        tools: [firmOsTools] 
-                    });
-                } catch (err: any) {
-                    console.log(`🔍 Model initialization error: ${err.message}`);
-                    if (modelName !== 'gemini-2.5-flash') {
-                        console.log(`⚠️  Fallback to default model (gemini-2.5-flash) due to error: ${err.message}`);
-                        model = genAI.getGenerativeModel({ 
-                            model: 'gemini-2.5-flash', 
-                            systemInstruction: systemInstruction,
-                            tools: [firmOsTools] 
-                        });
-                    } else {
-                        throw err;
-                    }
-                }
-
-                const chat = model.startChat();
-                let currentPrompt: string | Array<any> = prompt;
-                let loopCount = 0;
-                let maxLoops = 5;
-                const loopMonitorModelName = await modelResolver.resolve('system/loop-monitor');
-                const loopMonitor = new LoopMonitor(genAI, loopMonitorModelName);
-
-                while (loopCount < maxLoops) {
-                    loopCount++;
-                    let result;
-                    try {
-                        result = await chat.sendMessage(currentPrompt);
-                    } catch (err: any) {
-                        console.log(`🔍 Runtime error in micro-loop: ${err.message}`);
-                        if (loopCount === 1 && modelName !== 'gemini-2.5-flash') {
-                            console.log(`⚠️  Fallback to default model (gemini-2.5-flash) due to runtime error: ${err.message}`);
-                            const fallbackModel = genAI.getGenerativeModel({ 
-                                model: 'gemini-2.5-flash', 
-                                systemInstruction: systemInstruction,
-                                tools: [firmOsTools] 
-                            });
-                            const fallbackChat = fallbackModel.startChat();
-                            result = await fallbackChat.sendMessage(prompt);
-                        } else {
-                            throw err;
-                        }
-                    }
-                    const response = result.response;
-                    const functionCalls = response.functionCalls();
-
-                    if (!functionCalls || functionCalls.length === 0) {
-                        const text = response.text();
-                        if (text && text.trim()) {
-                            console.log(`📝 Text Output:\n${text}`);
-                        } else if (loopCount === 1) {
-                            console.log(`⚠️  Empty response received from model.`);
-                        }
-                        break; // Exit loop if no more tool calls
-                    }
-
-                    console.log(`🔧 [Loop ${loopCount}/${maxLoops}] Executing ${functionCalls.length} tool call(s)...`);
-                    
-                    // Check if we are approaching the limit and might need an extension
-                    if (loopCount === maxLoops && maxLoops < 15) {
-                        console.log(`👁️‍🗨️  Analyzing loop progress...`);
-                        const history = await chat.getHistory();
-                        const status = await loopMonitor.analyze(history);
-                        if (status === 'PROGRESSING') {
-                            console.log(`🚀 LoopMonitor detected progress. Extending limit (+5).`);
-                            maxLoops += 5;
-                        } else {
-                            console.log(`🛑 LoopMonitor detected a STUCK state. Halting.`);
-                        }
-                    }
-
-                    const toolResponses: any[] = [];
-
-                    for (const call of functionCalls) {
-                        const tool = allTools.find(t => t.definition.name === call.name);
-                        if (tool) {
-                            try {
-                                const toolResult = await tool.execute(call.args);
-                                toolResponses.push({
-                                    functionResponse: {
-                                        name: call.name,
-                                        response: { content: toolResult || "Success" }
-                                    }
-                                });
-
-                                // Check for specialized tool effects
-                                if (call.name === 'initialize_feature_work') {
-                                    const slug = call.args.featureName.toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').trim();
-                                    await stateManager.initializeWorkflow({
-                                        featureId: slug,
-                                        featureName: call.args.featureName,
-                                        currentAgent: role,
-                                        status: 'drafting',
-                                        workbookPath: `company/work/${slug}.md`
-                                    });
-                                    console.log(`✨ [State] Initialized tracking for feature '${slug}'.`);
-                                }
-
-                                // Check for handoff intent
-                                const handoffConfig = handoffManager.getHandoffConfig(call.name);
-                                if (handoffConfig) {
-                                    const { featureId } = call.args;
-                                    const nextPrompt = handoffConfig.promptTemplate(call.args);
-                                    
-                                    console.log(`📡 [Handoff] Routing feature '${featureId}' to ${handoffConfig.targetRole}...`);
-                                    
-                                    // 1. Update State
-                                    await stateManager.updateWorkflow(featureId, {
-                                        currentAgent: handoffConfig.targetRole,
-                                        status: handoffConfig.nextStatus
-                                    }, {
-                                        timestamp: new Date().toISOString(),
-                                        fromAgent: role,
-                                        toAgent: handoffConfig.targetRole,
-                                        action: call.name,
-                                        note: call.args.note || call.args.feedback
-                                    });
-
-                                    // 2. Publish next task (if not human gate)
-                                    if (handoffConfig.targetRole !== 'human') {
-                                        const payload = JSON.stringify({ role: handoffConfig.targetRole, prompt: nextPrompt });
-                                        amqpChannel!.sendToQueue(QUEUE_NAME, Buffer.from(payload), { persistent: true });
-                                        console.log(`🚀 [Handoff] Published task for ${handoffConfig.targetRole}.`);
-                                    } else {
-                                        console.log(`🛑 [Handoff] Workflow paused for human approval.`);
-                                    }
-                                }
-                            } catch (err: any) {
-                                console.error(`❌ Error executing ${call.name}:`, err.message);
-                                toolResponses.push({
-                                    functionResponse: {
-                                        name: call.name,
-                                        response: { error: err.message }
-                                    }
-                                });
-                            }
-                        } else {
-                            console.error(`⚠️  Unknown tool requested: ${call.name}`);
-                        }
-                    }
-
-                    // Feed tool results back for the next turn
-                    currentPrompt = toolResponses;
-                }
-
-                if (loopCount >= maxLoops) {
-                    console.warn(`⚠️  Micro-loop hit maxLoops (${maxLoops})`);
-                }
-
-                console.log(`🏁 Task Completed: [${role}]`);
-                amqpChannel!.ack(msg);
-            } catch (error: any) {
-                console.error(`❌ Error:`, error.message);
-                
-                const isFatal = error.message.includes('not found') || 
-                               error.message.includes('401') || 
-                               error.message.includes('403') ||
-                               error.code === 'ENOENT';
-
-                if (isFatal) {
-                    await amqpChannel!.sendToQueue(ERROR_QUEUE, Buffer.from(JSON.stringify({ payload, error: error.message })), { persistent: true });
-                    amqpChannel!.ack(msg);
-                } else {
-                    setTimeout(() => amqpChannel!.nack(msg), 10000);
-                }
-            } finally {
-                isProcessing = false;
-            }
+            await processTask(payload.role, payload.prompt, payload.model, msg);
         });
+
+        // 2. External Request Queue
+        amqpChannel.consume(EXTERNAL_QUEUE, async (msg) => {
+            if (!msg) return;
+            const requestText = msg.content.toString();
+            console.log(`\n📥 External Request Received -> Routing to [intake-consultant]`);
+            await processTask('intake-consultant', requestText, undefined, msg);
+        });
+
     } catch (error) {
         console.error('Fatal Connection Error:', error);
     }
