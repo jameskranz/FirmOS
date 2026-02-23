@@ -7,12 +7,12 @@
     - [x] Implement the resolver class to pass tests.
 - [x] Task: Conductor - User Manual Verification 'Model Registry' (Protocol in workflow.md) 98dae17
 
-## Phase 2: Daemon Refactoring & Fallback
-- [ ] Task: Update `src/daemon.ts` to use the dynamic model resolver.
-- [ ] Task: Implement fallback logic in the daemon's micro-loop.
-    - [ ] Write integration test that simulates a model failure (e.g. using a fake model name) and verifies fallback to Flash.
-    - [ ] Implement the try-catch fallback logic in `startDaemon`.
-- [ ] Task: Conductor - User Manual Verification 'Daemon Refactoring' (Protocol in workflow.md)
+## Phase 2: Daemon Refactoring & Fallback [checkpoint: b25f490]
+- [x] Task: Update `src/daemon.ts` to use the dynamic model resolver. b25f490
+- [x] Task: Implement fallback logic in the daemon's micro-loop. b25f490
+    - [x] Write integration test that simulates a model failure (e.g. using a fake model name) and verifies fallback to Flash.
+    - [x] Implement the try-catch fallback logic in `startDaemon`.
+- [x] Task: Conductor - User Manual Verification 'Daemon Refactoring' (Protocol in workflow.md) b25f490
 
 ## Phase 3: Integration & Documentation
 - [ ] Task: Update `tech-stack.md` to document the multi-model architecture and supported tiers.
