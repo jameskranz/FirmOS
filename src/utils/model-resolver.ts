@@ -21,7 +21,12 @@ export class ModelResolver {
             return overrideModel;
         }
 
-        // 2. Registry Mapping
+        // 2. Global Development Override
+        if (process.env.FIRM_OS_MODEL_OVERRIDE) {
+            return process.env.FIRM_OS_MODEL_OVERRIDE;
+        }
+
+        // 3. Registry Mapping
         try {
             const rolesContent = await fs.readFile(this.rolesPath, 'utf8');
             const roleMappings = JSON.parse(rolesContent);
