@@ -12,6 +12,7 @@ import {
 import { SubmitForReviewTool } from './submit-for-review.ts';
 import { SubmitFeedbackTool } from './submit-feedback.ts';
 import { SubmitForApprovalTool } from './submit-for-approval.ts';
+import { ListRolesTool } from './list-roles.ts';
 import type { Tool } from '@google/generative-ai';
 
 export const allTools = [
@@ -26,7 +27,8 @@ export const allTools = [
     new ReadFeatureWorkTool(),
     new SubmitForReviewTool(),
     new SubmitFeedbackTool(),
-    new SubmitForApprovalTool()
+    new SubmitForApprovalTool(),
+    new ListRolesTool()
 ];
 
 export const firmOsTools: Tool = {
@@ -44,3 +46,4 @@ export * from './workbook-tools.ts';
 export * from './submit-for-review.ts';
 export * from './submit-feedback.ts';
 export * from './submit-for-approval.ts';
+export * from './list-roles.ts';
