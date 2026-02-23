@@ -7,9 +7,10 @@
 
 ## AI & Orchestration
 - **Google Gemini SDK (`@google/generative-ai`):** The core intelligence engine with full TypeScript support.
-- **Multi-Model Orchestration:** Supports multiple Gemini model tiers (Flash, Pro) dynamically resolved per agent role.
-    - **Default Tier:** Gemini 2.5 Flash for high-speed, cost-efficient processing.
-    - **Advanced Tier:** Gemini 2.5 Pro / Gemini 3 Pro for complex reasoning and architectural design.
+- **Hierarchical Multi-Model Orchestration:** Supports dynamic Gemini model tiers (MAX, HIGH, MEDIUM, LOW) resolved per agent role and task.
+    - **Tier Mapping (`model-tiers.json`):** Decouples abstract effort levels from specific model versions (e.g., `MAX -> gemini-3-pro-preview`).
+    - **Role Mapping (`role-models.json`):** Maps roles or specific tasks to tiers (e.g., `architect/review -> HIGH`).
+    - **SLA Resolution:** Supports hierarchical pathing (`company/roles/<family>/<task>.md`) falling back to base family SLAs.
 - **Automated Fallback:** Built-in resilience that automatically downgrades to the default Flash model if a specialized model request fails.
 - **Native Tool Calling:** Leverages Gemini's function-calling capabilities for direct environment interaction.
 
