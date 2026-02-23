@@ -11,6 +11,7 @@
     - **Tier Mapping (`model-tiers.json`):** Decouples abstract effort levels from specific model versions (e.g., `MAX -> gemini-3-pro-preview`).
     - **Role Mapping (`role-models.json`):** Maps roles or specific tasks to tiers (e.g., `architect/review -> HIGH`).
     - **SLA Resolution:** Supports hierarchical pathing (`company/roles/<family>/<task>.md`) falling back to base family SLAs.
+    - **Development Override:** Global `FIRM_OS_MODEL_OVERRIDE` environment variable for cost-controlled local development.
 - **Automated Fallback:** Built-in resilience that automatically downgrades to the default Flash model if a specialized model request fails.
 - **Native Tool Calling:** Leverages Gemini's function-calling capabilities for direct environment interaction.
 
