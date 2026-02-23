@@ -14,6 +14,7 @@ export interface WorkflowState {
     currentAgent: string;
     status: WorkflowStatus;
     workbookPath: string;
+    approvals: Record<string, { approved: boolean, timestamp: string, note?: string }>;
     history: WorkflowHistoryEntry[];
     updatedAt: string;
 }

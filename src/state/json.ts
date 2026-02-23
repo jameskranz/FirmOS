@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { BaseStateManager } from './base.ts';
-import type { WorkflowState, WorkflowHistoryEntry } from './base.ts';
+import { BaseStateManager } from './base.js';
+import type { WorkflowState, WorkflowHistoryEntry } from './base.js';
 
 export class JsonStateManager extends BaseStateManager {
     private filePath: string;
@@ -32,6 +32,7 @@ export class JsonStateManager extends BaseStateManager {
         const workflows = await this.readState();
         const newState: WorkflowState = {
             ...state,
+            approvals: {},
             history: [],
             updatedAt: new Date().toISOString()
         };
