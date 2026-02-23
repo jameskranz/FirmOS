@@ -118,7 +118,28 @@ export async function startDaemon() {
             try {
                 const modelName = await modelResolver.resolve(role, modelOverride);
                 console.log(`\n📥 Task Received: [${role}] (Model: ${modelName})`);
-                const rolePath = path.join(__dirname, '..', 'company', 'roles', `${role}.md`);
+                
+                // SLA Resolution Hierarchy:
+                // 1. Hierarchical (e.g. company/roles/architect/design.md)
+                // 2. Legacy/Flat (e.g. company/roles/senior-systems-architect.md)
+                let rolePath = path.join(__dirname, '..', 'company', 'roles', `${role}.md`);
+                if (role.includes('/')) {
+                    const familyTaskPath = path.join(__dirname, '..', 'company', 'roles', `${role}.md`);
+                    try {
+                        await fs.access(familyTaskPath);
+                        rolePath = familyTaskPath;
+                    } catch {
+                        // If role/task.md doesn't exist, check if the family has a base SLA
+                        const familyBase = path.join(__dirname, '..', 'company', 'roles', `${role.split('/')[0]}.md`);
+                        try {
+                            await fs.access(familyBase);
+                            rolePath = familyBase;
+                        } catch {
+                            // Keep default rolePath and let it fail if not found
+                        }
+                    }
+                }
+
                 const fileContent = await fs.readFile(rolePath, 'utf8');
                 
                 // Inject dynamic tool documentation
