@@ -1,7 +1,7 @@
 import amqp from 'amqplib';
 import { SchemaType } from '@google/generative-ai';
-import { BaseTool } from './base.ts';
-import type { ToolDefinition } from './base.ts';
+import { BaseTool } from './base.js';
+import type { ToolDefinition } from './base.js';
 
 export class PublishMessageTool extends BaseTool {
     get definition(): ToolDefinition {
@@ -47,5 +47,9 @@ export class PublishMessageTool extends BaseTool {
         } catch (err: any) {
             throw new Error(`Failed to publish message: ${err.message}`);
         }
+    }
+
+    get guidance(): string {
+        return "This is your primary tool for collaboration. Use it to delegate tasks to other agents, hand off completed work for the next phase of the SDLC, or communicate context between departments. Always ensure the 'role' corresponds to an existing hierarchical role in the organization chart.";
     }
 }

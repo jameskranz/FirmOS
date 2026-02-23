@@ -1,6 +1,6 @@
 import { SchemaType } from '@google/generative-ai';
-import { BaseTool } from './base.ts';
-import type { ToolDefinition } from './base.ts';
+import { BaseTool } from './base.js';
+import type { ToolDefinition } from './base.js';
 
 export class SubmitForReviewTool extends BaseTool {
     get definition(): ToolDefinition {
@@ -39,5 +39,9 @@ export class SubmitForReviewTool extends BaseTool {
     async execute(args: { featureId: string, featureName: string, workbookPath: string, note?: string, targetRole?: string }): Promise<string> {
         console.log(`🚀 Intent: submit_for_review -> Feature: ${args.featureName} (${args.featureId})`);
         return `SUCCESS: Feature '${args.featureName}' has been submitted for technical review${args.targetRole ? ` to [${args.targetRole}]` : ''}. The loop will now route accordingly.`;
+    }
+
+    get guidance(): string {
+        return "Use this tool to transition a feature from the definition phase to the technical review phase. It triggers a handoff to an architect. You can optionally specify a 'targetRole' if you need a specialized review (e.g., 'architect/security').";
     }
 }

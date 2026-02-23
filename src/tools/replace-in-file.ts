@@ -2,11 +2,16 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { SchemaType } from '@google/generative-ai';
-import { BaseTool } from './base.ts';
-import type { ToolDefinition } from './base.ts';
+import { BaseTool } from './base.js';
+import type { ToolDefinition } from './base.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Robust root detection:
+const PROJECT_ROOT = __dirname.includes(path.join('dist', 'src'))
+    ? path.resolve(__dirname, '..', '..', '..')
+    : path.resolve(__dirname, '..', '..');
 
 export class ReplaceInFileTool extends BaseTool {
     get definition(): ToolDefinition {
@@ -36,7 +41,7 @@ export class ReplaceInFileTool extends BaseTool {
 
     async execute(args: { relativePath: string, oldText: string, newText: string }): Promise<string> {
         const { relativePath, oldText, newText } = args;
-        const fullPath = path.resolve(__dirname, '..', '..', relativePath);
+        const fullPath = path.join(PROJECT_ROOT, relativePath);
         const currentContent = await fs.readFile(fullPath, 'utf8');
         
         console.log(`🔍 [replace_in_file] Debug: Looking for text (length ${oldText.length}): "${oldText}"`);
@@ -49,6 +54,10 @@ export class ReplaceInFileTool extends BaseTool {
             console.log(`❌ [replace_in_file] Debug: Text not found. File preview: "${currentContent.substring(0, 200).replace(/\n/g, '\\n')}"`);
             throw new Error(`replace_in_file failed: oldText not found in ${relativePath}`);
         }
+    }
+
+    get guidance(): string {
+        return "Use this tool for surgical updates to specific lines or blocks of text within large files (like long Markdown documents or code files). It is safer than 'save_file' for large documents because it preserves the rest of the content. You must provide the EXACT existing text (including whitespace) for the replacement to succeed. If the text is not found exactly, the tool will fail.";
     }
 }
 

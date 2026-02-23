@@ -1,4 +1,4 @@
 {
-  "role": "hr-director",
-  "prompt": "HIRE TASK: Re-hire the 'product-manager' with updated capabilities. \\n\\nUPDATED RESPONSIBILITIES: The Product Manager must now use specific tools for handoffs: \\n1. Use 'submit_for_review' when a feature workbook is ready for architectural review. \\n2. Use 'submit_for_approval' when a feature is ready for final human approval. \\n\\nINSTRUCTION: Output the full Markdown SLA using the hire_agent tool with roleName='product-manager'. Ensure the agent knows to use these intent-based tools instead of generic messages for handoffs."
+    "role": "hr/recruiter",
+    "prompt": "I have received a new request for a 'Todo App'. I have checked the list of roles and we do not have a 'planning/manager' to break this down. Please initiate the hiring process for this role."
 }

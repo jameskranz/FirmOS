@@ -1,4 +1,4 @@
 {
-  "role": "hr-director",
-  "prompt": "Please hire a 'Product Manager' for our AI development swarm. The Product Manager's job is to take raw, unstructured product ideas or user requirements and convert them into strict, well-formatted JSON feature specifications. They must not write code. They only output JSON specs detailing features, user flows, and acceptance criteria. Remember to output the pure markdown for their system prompt with a FILEPATH header."
+    "role": "hr/director",
+    "prompt": "We have received a new external request: 'Build a Todo App'. However, our team audit shows we lack a 'planning/manager' to break this down into features. Please hire one immediately."
 }

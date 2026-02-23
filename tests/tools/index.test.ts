@@ -2,11 +2,11 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import assert from 'node:assert';
 // @ts-ignore
-import { ReplaceInFileTool } from '../../src/tools/replace-in-file.ts';
+import { ReplaceInFileTool } from '../../src/tools/replace-in-file.js';
 // @ts-ignore
-import { SaveFileTool } from '../../src/tools/save-file.ts';
+import { SaveFileTool } from '../../src/tools/save-file.js';
 // @ts-ignore
-import { HireAgentTool } from '../../src/tools/hire-agent.ts';
+import { HireAgentTool } from '../../src/tools/hire-agent.js';
 
 async function testReplaceTool() {
     console.log('--- Testing ReplaceInFileTool ---');
@@ -51,11 +51,13 @@ async function testHireTool() {
     console.log('--- Testing HireAgentTool ---');
     const roleName = 'test-agent';
     const sla = '# Test SLA';
+    const description = 'A test agent for verifying hire functionality.';
     const tool = new HireAgentTool();
     const expectedPath = path.join('company', 'roles', 'test-agent.md');
     try {
         await tool.execute({
             roleName: roleName,
+            description: description,
             slaContent: sla
         });
         const hired = await fs.readFile(expectedPath, 'utf8');

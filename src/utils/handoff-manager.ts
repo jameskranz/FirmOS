@@ -1,4 +1,4 @@
-import type { WorkflowStatus } from '../state/base.ts';
+import type { WorkflowStatus } from '../state/base.js';
 
 export interface HandoffConfig {
     targetRole: string;

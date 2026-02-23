@@ -1,6 +1,6 @@
 {
-  "hr-director": "MAX",
-  "intake-consultant": "MEDIUM",
-  "recruiter": "MEDIUM",
+  "hr/director": "MAX",
+  "hr/recruiter": "MEDIUM",
+  "intake/consultant": "MEDIUM",
   "default": "MEDIUM"
 }

@@ -66,7 +66,29 @@ Every agent in `company/roles/` MUST adhere to a strict structure. They are esse
 *   **Description:** A foundational feature to test the end-to-end workflow of feature definition and architectural handoff within the FirmOS environment. This verifies the Product Manager's ability to initialize a feature, add content, and submit for review.
 *   **Status:** Pending Architectural Review - Awaiting detailed review of the updated feature workbook.
 
-### B. Cross-Agent Context Sharing
+### B. Roadmap App
+*   **Description:** A user-friendly web application designed to visualize and manage the product roadmap, providing a centralized platform for product managers, stakeholders, and development teams to understand strategic direction, track progress, and collaborate on initiatives.
+*   **Security Considerations:**
+    *   **Authentication & Authorization:** Implement strong password policies, MFA, RBAC with least privilege, robust session management, and protection against brute-force attacks.
+    *   **Data Handling:** Encrypt sensitive data at rest and in transit. Classify data, validate all user inputs to prevent injection attacks, and implement comprehensive logging for auditability.
+    *   **Input Validation & Output Encoding:** Strict server-side and client-side validation, context-aware output encoding to prevent XSS, and Content Security Policy (CSP).
+    *   **API Security:** Implement rate limiting, secure API gateways, robust authentication/authorization for all endpoints, and non-verbose error handling.
+    *   **Deployment & Infrastructure:** Adhere to cloud security shared responsibility model, implement network segmentation, regular patching, security audits, and secure configuration management.
+    *   **Compliance:** Identify and adhere to relevant regulatory and industry compliance requirements (e.g., GDPR, SOC2).
+    *   **Reporting & Export:** Enforce strict authorization for data export and sanitize exported content.
+    *   **Dependency Security:** Regular scanning and updating of all third-party dependencies.
+    *   **General Practices:** Integrate security by design, conduct formal threat modeling, incorporate security testing (SAST, DAST, pen testing), establish vulnerability management, and develop an incident response plan.
+*   **Architectural Considerations (Feedback Incorporated):**
+    *   **Database Scalability:** Detail specific scaling strategy (vertical/horizontal, sharding, replicas) for chosen database (e.g., PostgreSQL, MongoDB), considering projected load and data growth.
+    *   **API Design:** Define API paradigm (RESTful, GraphQL, gRPC), embedding security best practices (rate limiting, auth, input validation) from inception. Detail external integration mechanisms (OAuth, secure credential management).
+    *   **Real-time Capabilities:** Incorporate technologies like WebSockets or SSE for real-time updates for collaborative features (comments, live updates) to ensure data consistency.
+    *   **Reporting & Export:** Implement asynchronous processing (message queues, worker processes) for computationally intensive report generation and data export to maintain application responsiveness.
+    *   **Granular Authorization:** Define authorization matrix for object-level permissions, beyond purely role-based, to meet future business needs.
+    *   **Observability & Monitoring:** Design and implement a robust logging and monitoring framework (application, security, performance, infrastructure metrics) from the outset, specifying tools (e.g., ELK, Prometheus/Grafana).
+    *   **Extensibility:** Ensure data model and API are flexible and extensible to accommodate future enhancements (e.g., advanced dependency tracking, analytics integration) without major refactoring; consider event-driven architecture.
+*   **Status:** Architectural Review Complete - Incorporating feedback into definition.
+
+### C. Cross-Agent Context Sharing
 *   **Description:** This feature enables the seamless sharing of context and data between different AI agents within the FirmOS ecosystem, improving collaboration and reducing redundant processing.
 *   **Status:** Initial Requirements Drafted - Awaiting Architectural Review.
 

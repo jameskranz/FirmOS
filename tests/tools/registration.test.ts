@@ -4,7 +4,7 @@ import { firmOsTools } from '../../src/tools/index.ts';
 
 console.log('Running registration.test.ts');
 
-const toolNames = firmOsTools.functionDeclarations?.map((f: any) => f.name) || [];
+const toolNames = (firmOsTools as any).functionDeclarations?.map((f: any) => f.name) || [];
 
 try {
   assert.ok(toolNames.includes('submit_for_review'), 'submit_for_review should be registered');

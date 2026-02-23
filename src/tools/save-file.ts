@@ -2,11 +2,16 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { SchemaType } from '@google/generative-ai';
-import { BaseTool } from './base.ts';
-import type { ToolDefinition } from './base.ts';
+import { BaseTool } from './base.js';
+import type { ToolDefinition } from './base.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Robust root detection:
+const PROJECT_ROOT = __dirname.includes(path.join('dist', 'src'))
+    ? path.resolve(__dirname, '..', '..', '..')
+    : path.resolve(__dirname, '..', '..');
 
 export class SaveFileTool extends BaseTool {
     get definition(): ToolDefinition {
@@ -32,13 +37,17 @@ export class SaveFileTool extends BaseTool {
 
     async execute(args: { relativePath: string, content: string }): Promise<string> {
         const { relativePath, content } = args;
-        const fullOutputPath = path.resolve(__dirname, '..', '..', relativePath);
+        const fullOutputPath = path.join(PROJECT_ROOT, relativePath);
         
         await fs.mkdir(path.dirname(fullOutputPath), { recursive: true });
         await fs.writeFile(fullOutputPath, content.replace(/\r/g, ''));
         
         console.log(`🛠️  Executed Tool: save_file -> 📂 ${relativePath}`);
         return `Successfully saved file to ${relativePath}`;
+    }
+
+    get guidance(): string {
+        return "Use this tool to create new files or completely overwrite existing ones. It is your primary method for delivering code, documentation, and configuration changes. Always ensure the path is relative to the project root. The tool will automatically create any missing directories in the path.";
     }
 }
 

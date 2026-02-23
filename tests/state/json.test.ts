@@ -28,13 +28,15 @@ async function testJsonStateManager() {
         featureName,
         currentAgent: 'product-manager',
         status: 'drafting',
-        workbookPath
+        workbookPath,
+        approvals: {}
     });
 
     const state = await manager.getWorkflow(featureId);
     assert.ok(state, 'Workflow should be initialized');
     assert.strictEqual(state.featureName, featureName);
     assert.strictEqual(state.status, 'drafting');
+    assert.deepStrictEqual(state.approvals, {}, 'Approvals should be empty');
     assert.strictEqual(state.history.length, 0);
     console.log('✓ Initialization passed');
 
@@ -47,15 +49,21 @@ async function testJsonStateManager() {
         note: 'Initial draft complete'
     };
 
+    const newApprovals = {
+        'architect/review': { approved: true, timestamp: new Date().toISOString(), note: 'Looks good' }
+    };
+
     await manager.updateWorkflow(featureId, {
         currentAgent: 'senior-systems-architect',
-        status: 'reviewing'
+        status: 'reviewing',
+        approvals: newApprovals
     }, historyEntry);
 
     const updatedState = await manager.getWorkflow(featureId);
     assert.ok(updatedState);
     assert.strictEqual(updatedState.status, 'reviewing');
     assert.strictEqual(updatedState.currentAgent, 'senior-systems-architect');
+    assert.deepStrictEqual(updatedState.approvals, newApprovals, 'Approvals should be updated');
     assert.strictEqual(updatedState.history.length, 1);
     assert.strictEqual(updatedState.history[0].action, 'submit_for_review');
     console.log('✓ Update passed');

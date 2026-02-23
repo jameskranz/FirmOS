@@ -5,14 +5,21 @@ import { fileURLToPath } from 'node:url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Robust root detection:
+// 1. If we are in dist/src/utils, root is three levels up
+// 2. If we are in src/utils, root is two levels up
+const PROJECT_ROOT = __dirname.includes(path.join('dist', 'src'))
+    ? path.resolve(__dirname, '..', '..', '..')
+    : path.resolve(__dirname, '..', '..');
+
 export class ModelResolver {
     private rolesPath: string;
     private tiersPath: string;
     private defaultModel = 'gemini-2.5-flash';
 
     constructor(rolesPath?: string, tiersPath?: string) {
-        this.rolesPath = rolesPath || path.resolve(__dirname, '../../company/role-models.json');
-        this.tiersPath = tiersPath || path.resolve(__dirname, '../../company/model-tiers.json');
+        this.rolesPath = rolesPath || path.join(PROJECT_ROOT, 'company', 'role-models.json');
+        this.tiersPath = tiersPath || path.join(PROJECT_ROOT, 'company', 'model-tiers.json');
     }
 
     async resolve(role: string, overrideModel?: string): Promise<string> {

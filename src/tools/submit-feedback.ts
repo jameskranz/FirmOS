@@ -1,6 +1,6 @@
 import { SchemaType } from '@google/generative-ai';
-import { BaseTool } from './base.ts';
-import type { ToolDefinition } from './base.ts';
+import { BaseTool } from './base.js';
+import type { ToolDefinition } from './base.js';
 
 export class SubmitFeedbackTool extends BaseTool {
     get definition(): ToolDefinition {
@@ -31,5 +31,9 @@ export class SubmitFeedbackTool extends BaseTool {
     async execute(args: { featureId: string, feedback: string, targetRole?: string }): Promise<string> {
         console.log(`🚀 Intent: submit_feedback -> Feature: ${args.featureId}`);
         return `SUCCESS: Feedback for feature '${args.featureId}' has been submitted${args.targetRole ? ` to [${args.targetRole}]` : ''}. The loop will now route accordingly.`;
+    }
+
+    get guidance(): string {
+        return "Use this tool to return a feature to an upstream role (typically 'product/define') with specific technical feedback, concerns, or requirements for revision. It effectively 'rejects' the current version and asks for changes based on your assessment.";
     }
 }

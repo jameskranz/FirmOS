@@ -1,6 +1,6 @@
 import { SchemaType } from '@google/generative-ai';
-import { BaseTool } from './base.ts';
-import type { ToolDefinition } from './base.ts';
+import { BaseTool } from './base.js';
+import type { ToolDefinition } from './base.js';
 
 export class SubmitForApprovalTool extends BaseTool {
     get definition(): ToolDefinition {
@@ -31,5 +31,9 @@ export class SubmitForApprovalTool extends BaseTool {
     async execute(args: { featureId: string, featureName: string, note?: string }): Promise<string> {
         console.log(`🚀 Intent: submit_for_approval -> Feature: ${args.featureName} (${args.featureId})`);
         return `SUCCESS: Feature '${args.featureName}' has been submitted for final approval. The loop will now pause for human review.`;
+    }
+
+    get guidance(): string {
+        return "Use this tool only when a feature is complete, technically reviewed, and ready for final stakeholder sign-off. It halts the autonomous loop and moves the feature into a 'pending_approval' state, signaling that human input is required before proceeding to implementation.";
     }
 }

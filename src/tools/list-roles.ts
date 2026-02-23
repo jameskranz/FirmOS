@@ -57,6 +57,10 @@ export class ListRolesTool extends BaseTool {
         }
     }
 
+    get guidance(): string {
+        return "Use this tool to maintain situational awareness of the current team. It helps you discover which specialized roles are already available for handoffs. ALWAYS call this tool before calling 'request_hire' or 'publish_message' to ensure you are routing to the correct, existing agent.";
+    }
+
     private async scanRoles(dir: string, baseDir: string = ''): Promise<string[]> {
         const entries = await fs.readdir(dir, { withFileTypes: true });
         let files: string[] = [];

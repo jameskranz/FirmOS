@@ -7,25 +7,30 @@ const __dirname = path.dirname(__filename);
 
 async function resetWork() {
     const workDir = path.join(__dirname, '..', 'company', 'work');
+    const stateFile = path.join(__dirname, '..', 'company', 'state', 'workflows.json');
 
     try {
-        if (!(await fs.stat(workDir).catch(() => null))) {
-            console.log('✅ Work directory does not exist, nothing to reset.');
-            return;
+        // 1. Clear feature workbooks
+        if (await fs.stat(workDir).catch(() => null)) {
+            const files = await fs.readdir(workDir);
+            for (const file of files) {
+                const filePath = path.join(workDir, file);
+                if ((await fs.stat(filePath)).isDirectory()) {
+                    await fs.rm(filePath, { recursive: true });
+                } else {
+                    await fs.unlink(filePath);
+                }
+                console.log(`🗑️  Deleted workbook: ${file}`);
+            }
+            console.log('✅ Work directory reset.');
         }
 
-        const files = await fs.readdir(workDir);
-        
-        for (const file of files) {
-            const filePath = path.join(workDir, file);
-            if ((await fs.stat(filePath)).isDirectory()) {
-                await fs.rm(filePath, { recursive: true });
-            } else {
-                await fs.unlink(filePath);
-            }
-            console.log(`🗑️  Deleted: ${file}`);
+        // 2. Clear workflow state
+        if (await fs.stat(stateFile).catch(() => null)) {
+            await fs.writeFile(stateFile, '{}');
+            console.log('🗑️  Cleared: workflows.json');
         }
-        console.log('✅ Work directory reset.');
+        
     } catch (error: any) {
         console.error('❌ Failed to reset work:', error.message);
         process.exit(1);

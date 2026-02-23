@@ -89,6 +89,10 @@ export class HireAgentTool extends BaseTool {
         console.log(`🤝 Executed Tool: hire_agent -> 👤 hired [${roleName}] (Model/Tier: ${assignedModel})`);
         return `Successfully hired agent ${roleName} and saved SLA to ${relativePath}. Model tier set to ${assignedModel}. Registry updated with description.`;
     }
+
+    get guidance(): string {
+        return "This tool is exclusively for use by the 'hr/director' role. It creates a formal Service Level Agreement (SLA) for a new agent. You must provide a clear hierarchical name (family/task), a concise purpose description, and the full Markdown system prompt for the new hire. Assign model tiers (MAX, HIGH, MEDIUM, LOW) based on the cognitive complexity of the task.";
+    }
 }
 
 // Entry point for direct testing or CLI usage

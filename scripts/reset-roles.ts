@@ -8,6 +8,7 @@ const __dirname = path.dirname(__filename);
 async function resetRoles() {
     const rolesDir = path.join(__dirname, '..', 'company', 'roles');
     const modelsFile = path.join(__dirname, '..', 'company', 'role-models.json');
+    const registryFile = path.join(__dirname, '..', 'company', 'role-registry.json');
     const keepPaths = [
         path.join('hr', 'director.md'),
         path.join('hr', 'recruiter.md'),
@@ -49,6 +50,27 @@ async function resetRoles() {
         };
         await fs.writeFile(modelsFile, JSON.stringify(baselineModels, null, 2));
         console.log('✅ Role-models registry reset to baseline.');
+
+        // Reset role-registry.json to baseline
+        const baselineRegistry = {
+            "hr/director": {
+                "description": "Chief Prompt Engineer and agent architect. Responsible for designing and 'hiring' new agents.",
+                "slaPath": "company/roles/hr/director.md",
+                "modelTier": "MAX"
+            },
+            "hr/recruiter": {
+                "description": "Identifies team gaps and defines role requirements based on project needs. Tasks the HR Director to initiate hiring.",
+                "slaPath": "company/roles/hr/recruiter.md",
+                "modelTier": "MEDIUM"
+            },
+            "intake/consultant": {
+                "description": "Primary intake for external requests and triage. Analyzes client requests and routes work to appropriate agents or initiates recruitment.",
+                "slaPath": "company/roles/intake/consultant.md",
+                "modelTier": "MEDIUM"
+            }
+        };
+        await fs.writeFile(registryFile, JSON.stringify(baselineRegistry, null, 2));
+        console.log('✅ Role-registry reset to baseline.');
 
         console.log(`✅ Roles directory reset to core hierarchical roles.`);
     } catch (error: any) {

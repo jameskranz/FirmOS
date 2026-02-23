@@ -2,11 +2,16 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { SchemaType } from '@google/generative-ai';
-import { BaseTool } from './base.ts';
-import type { ToolDefinition } from './base.ts';
+import { BaseTool } from './base.js';
+import type { ToolDefinition } from './base.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Robust root detection:
+const PROJECT_ROOT = __dirname.includes(path.join('dist', 'src'))
+    ? path.resolve(__dirname, '..', '..', '..')
+    : path.resolve(__dirname, '..', '..');
 
 export class ListDirectoryTool extends BaseTool {
     get definition(): ToolDefinition {
@@ -28,7 +33,7 @@ export class ListDirectoryTool extends BaseTool {
 
     async execute(args: { relativePath: string }): Promise<string> {
         const { relativePath } = args;
-        const fullPath = path.resolve(__dirname, '..', '..', relativePath);
+        const fullPath = path.join(PROJECT_ROOT, relativePath);
         
         try {
             const items = await fs.readdir(fullPath);
@@ -37,5 +42,9 @@ export class ListDirectoryTool extends BaseTool {
         } catch (err: any) {
             throw new Error(`Failed to list directory ${relativePath}: ${err.message}`);
         }
+    }
+
+    get guidance(): string {
+        return "Use this tool to explore the project's folder structure. It is particularly useful when you need to find where certain types of files (like SLAs or workbooks) are stored, or to verify the existence of subdirectories before attempting file operations.";
     }
 }

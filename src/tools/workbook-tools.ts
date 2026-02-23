@@ -2,17 +2,24 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { SchemaType } from '@google/generative-ai';
-import { BaseTool } from './base.ts';
-import type { ToolDefinition } from './base.ts';
+import { BaseTool } from './base.js';
+import type { ToolDefinition } from './base.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Robust root detection:
+// 1. If we are in dist/src/tools, root is three levels up
+// 2. If we are in src/tools, root is two levels up
+const PROJECT_ROOT = __dirname.includes(path.join('dist', 'src'))
+    ? path.resolve(__dirname, '..', '..', '..')
+    : path.resolve(__dirname, '..', '..');
 
 function getSlug(name: string): string {
     return name.toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').trim();
 }
 
-const WORK_DIR = path.resolve(__dirname, '..', '..', 'company', 'work');
+const WORK_DIR = path.join(PROJECT_ROOT, 'company', 'work');
 
 export class InitializeFeatureWorkTool extends BaseTool {
     get definition(): ToolDefinition {
@@ -47,6 +54,10 @@ Created: ${new Date().toISOString()}
         await fs.writeFile(filePath, initialContent);
         console.log(`📝 Initialized workbook: ${slug}.md`);
         return `SUCCESS: Workbook initialized. featureId='${slug}', path='company/work/${slug}.md'`;
+    }
+
+    get guidance(): string {
+        return "Use this tool at the very beginning of a new project or feature. It creates a dedicated Markdown workbook in 'company/work/' which will serve as the source of truth for the entire feature lifecycle. Use the returned 'featureId' for all subsequent updates.";
     }
 }
 
@@ -93,6 +104,10 @@ ${args.content}
         console.log(`🖋️  Added note to workbook: ${slug}.md`);
         return `Successfully added note to ${args.featureName} workbook.`;
     }
+
+    get guidance(): string {
+        return "Use this tool to record every step of your progress, including initial drafts, refined requirements, architectural decisions, or feedback summaries. The feature workbook must contain the complete history of the feature's evolution.";
+    }
 }
 
 export class ReadFeatureWorkTool extends BaseTool {
@@ -124,5 +139,9 @@ export class ReadFeatureWorkTool extends BaseTool {
         } catch (err: any) {
             throw new Error(`Workbook not found for feature: ${args.featureName}`);
         }
+    }
+
+    get guidance(): string {
+        return "Use this tool whenever you take over a feature from another agent. It allows you to read the full history and specifications recorded in the workbook, ensuring context is preserved across handoffs.";
     }
 }
