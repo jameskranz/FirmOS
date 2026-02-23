@@ -1,0 +1,8 @@
+{
+  "track_id": "dynamic_hiring_20260222",
+  "type": "feature",
+  "status": "new",
+  "created_at": "2026-02-22T12:00:00Z",
+  "updated_at": "2026-02-22T12:00:00Z",
+  "description": "I want to make sure the dynamic hiring process works. We should be able to have something be asked to be done (perhaps via request to different, 'external' queue? let's explore options) and if we think we need a new role+task to do it, we 'hire' the role+task. We likely need a tool to get current role+tasts as part of this. For example, in a blank state, if we ask for a new app, it should probably hire a product person first to propose requirements. Then once there are requirements, the product should naturally want someone to review it, so somehow we should end up hiring an architect to review it."
+}
