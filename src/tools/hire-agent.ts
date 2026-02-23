@@ -26,7 +26,7 @@ export class HireAgentTool extends BaseTool {
                     },
                     model: {
                         type: SchemaType.STRING,
-                        description: "Optional: The specific Gemini model for this role (e.g., 'gemini-2.5-pro'). If omitted, defaults based on seniority keywords (Senior/Expert -> Pro)."
+                        description: "Optional: The model tier (MAX, HIGH, MEDIUM, LOW) or specific Gemini model name. If omitted, defaults based on seniority keywords (Senior/Expert -> HIGH)."
                     }
                 },
                 required: ["roleName", "slaContent"]
@@ -44,9 +44,9 @@ export class HireAgentTool extends BaseTool {
         await fs.mkdir(path.dirname(fullOutputPath), { recursive: true });
         await fs.writeFile(fullOutputPath, slaContent.replace(/\r/g, ''));
         
-        // Update model registry
-        const modelsPath = path.resolve(__dirname, '..', '..', 'company', 'models.json');
-        let models: Record<string, string> = {};
+        // Update role registry
+        const modelsPath = path.resolve(__dirname, '..', '..', 'company', 'role-models.json');
+        let models: Record<string, any> = {};
         try {
             const content = await fs.readFile(modelsPath, 'utf8');
             models = JSON.parse(content);
@@ -55,14 +55,14 @@ export class HireAgentTool extends BaseTool {
         let assignedModel = model;
         if (!assignedModel) {
             const isSenior = slaContent.match(/Senior|Expert|Lead|Architect/i);
-            assignedModel = isSenior ? 'gemini-2.5-pro' : 'gemini-2.5-flash';
+            assignedModel = isSenior ? 'HIGH' : 'MEDIUM';
         }
 
         models[roleName] = assignedModel;
         await fs.writeFile(modelsPath, JSON.stringify(models, null, 2));
 
-        console.log(`🤝 Executed Tool: hire_agent -> 👤 hired [${roleName}] (Model: ${assignedModel})`);
-        return `Successfully hired agent ${roleName} and saved SLA to ${relativePath}. Model set to ${assignedModel}.`;
+        console.log(`🤝 Executed Tool: hire_agent -> 👤 hired [${roleName}] (Model/Tier: ${assignedModel})`);
+        return `Successfully hired agent ${roleName} and saved SLA to ${relativePath}. Model tier set to ${assignedModel}.`;
     }
 }
 

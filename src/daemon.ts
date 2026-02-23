@@ -9,6 +9,7 @@ import { firmOsTools, allTools } from './tools/index.ts';
 import { JsonStateManager } from './state/json.ts';
 import { HandoffManager } from './utils/handoff-manager.ts';
 import { ModelResolver } from './utils/model-resolver.ts';
+import { LoopMonitor } from './utils/loop-monitor.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -29,7 +30,7 @@ const STATE_FILE = path.join(__dirname, '..', 'company', 'state', 'workflows.jso
 
 const stateManager = new JsonStateManager(STATE_FILE);
 const handoffManager = new HandoffManager();
-const modelResolver = new ModelResolver(path.join(__dirname, '..', 'company', 'models.json'));
+const modelResolver = new ModelResolver(path.join(__dirname, '..', 'company', 'role-models.json'));
 
 let amqpConnection: amqp.Connection | null = null;
 let amqpChannel: amqp.Channel | null = null;
@@ -174,9 +175,11 @@ export async function startDaemon() {
                 const chat = model.startChat();
                 let currentPrompt: string | Array<any> = prompt;
                 let loopCount = 0;
-                const MAX_LOOPS = 5;
+                let maxLoops = 5;
+                const loopMonitorModelName = await modelResolver.resolve('system/loop-monitor');
+                const loopMonitor = new LoopMonitor(genAI, loopMonitorModelName);
 
-                while (loopCount < MAX_LOOPS) {
+                while (loopCount < maxLoops) {
                     loopCount++;
                     let result;
                     try {
@@ -209,7 +212,21 @@ export async function startDaemon() {
                         break; // Exit loop if no more tool calls
                     }
 
-                    console.log(`🔧 [Loop ${loopCount}/${MAX_LOOPS}] Executing ${functionCalls.length} tool call(s)...`);
+                    console.log(`🔧 [Loop ${loopCount}/${maxLoops}] Executing ${functionCalls.length} tool call(s)...`);
+                    
+                    // Check if we are approaching the limit and might need an extension
+                    if (loopCount === maxLoops && maxLoops < 15) {
+                        console.log(`👁️‍🗨️  Analyzing loop progress...`);
+                        const history = await chat.getHistory();
+                        const status = await loopMonitor.analyze(history);
+                        if (status === 'PROGRESSING') {
+                            console.log(`🚀 LoopMonitor detected progress. Extending limit (+5).`);
+                            maxLoops += 5;
+                        } else {
+                            console.log(`🛑 LoopMonitor detected a STUCK state. Halting.`);
+                        }
+                    }
+
                     const toolResponses: any[] = [];
 
                     for (const call of functionCalls) {
@@ -284,8 +301,8 @@ export async function startDaemon() {
                     currentPrompt = toolResponses;
                 }
 
-                if (loopCount >= MAX_LOOPS) {
-                    console.warn(`⚠️  Micro-loop hit MAX_LOOPS (${MAX_LOOPS})`);
+                if (loopCount >= maxLoops) {
+                    console.warn(`⚠️  Micro-loop hit maxLoops (${maxLoops})`);
                 }
 
                 console.log(`🏁 Task Completed: [${role}]`);

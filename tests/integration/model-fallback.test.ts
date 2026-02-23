@@ -41,7 +41,7 @@ async function testModelFallback() {
     
     console.log(`Publishing task with invalid model...`);
     const task = {
-        role: 'product-manager',
+        role: 'hr-director',
         model: 'this-model-does-not-exist-at-all-12345',
         prompt: 'Just say hello.'
     };

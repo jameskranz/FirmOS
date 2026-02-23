@@ -1,0 +1,4 @@
+{
+  "role": "product/manager",
+  "prompt": "Please initialize 5 new features for our roadmap: 'Feature A', 'Feature B', 'Feature C', 'Feature D', and 'Feature E'. Add a simple note for each one. This should take many steps, please persist until all 5 are initialized."
+}

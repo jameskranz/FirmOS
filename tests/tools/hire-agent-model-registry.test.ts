@@ -7,7 +7,7 @@ import { HireAgentTool } from '../../src/tools/hire-agent.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const MODELS_FILE = path.resolve(__dirname, '../../company/models.json');
+const MODELS_FILE = path.resolve(__dirname, '../../company/role-models.json');
 const ROLES_DIR = path.resolve(__dirname, '../../company/roles');
 
 async function testHireAgentModelRegistry() {
@@ -21,10 +21,10 @@ async function testHireAgentModelRegistry() {
         await tool.execute({
             roleName: 'test-role-1',
             slaContent: '# Test Role 1',
-            model: 'gemini-3-pro'
+            model: 'MAX'
         });
         const models1 = JSON.parse(await fs.readFile(MODELS_FILE, 'utf8'));
-        assert.strictEqual(models1['test-role-1'], 'gemini-3-pro', 'Should assign explicit model');
+        assert.strictEqual(models1['test-role-1'], 'MAX', 'Should assign explicit model tier');
         console.log('✓ Explicit model assignment passed');
 
         // 2. Test seniority-based assignment (Senior)
@@ -34,7 +34,7 @@ async function testHireAgentModelRegistry() {
 You are an expert in Node.js.`
         });
         const models2 = JSON.parse(await fs.readFile(MODELS_FILE, 'utf8'));
-        assert.strictEqual(models2['senior-dev'], 'gemini-2.5-pro', 'Should assign Pro model for Senior');
+        assert.strictEqual(models2['senior-dev'], 'HIGH', 'Should assign HIGH tier for Senior');
         console.log('✓ Seniority keyword detection (Senior) passed');
 
         // 3. Test seniority-based assignment (Architect)
@@ -44,7 +44,7 @@ You are an expert in Node.js.`
 You review designs.`
         });
         const models3 = JSON.parse(await fs.readFile(MODELS_FILE, 'utf8'));
-        assert.strictEqual(models3['architect/review'], 'gemini-2.5-pro', 'Should assign Pro model for Architect');
+        assert.strictEqual(models3['architect/review'], 'HIGH', 'Should assign HIGH tier for Architect');
         console.log('✓ Seniority keyword detection (Architect) passed');
 
         // 4. Test default assignment (Junior/Regular)
@@ -54,7 +54,7 @@ You review designs.`
 You write code.`
         });
         const models4 = JSON.parse(await fs.readFile(MODELS_FILE, 'utf8'));
-        assert.strictEqual(models4['junior-dev'], 'gemini-2.5-flash', 'Should assign Flash model for Junior');
+        assert.strictEqual(models4['junior-dev'], 'MEDIUM', 'Should assign MEDIUM tier for Junior');
         console.log('✓ Default model assignment (Junior) passed');
 
     } finally {
