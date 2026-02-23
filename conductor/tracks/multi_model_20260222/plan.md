@@ -16,5 +16,22 @@
 
 ## Phase 3: Integration & Documentation
 - [x] Task: Update `tech-stack.md` to document the multi-model architecture and supported tiers. d61a326
-- [x] Task: Perform end-to-end validation with a multi-model chain (e.g. Architect on Pro, PM on Flash). b25f490
+- [x] Task: Perform end-to-end validation with a multi-model chain. b25f490
 - [x] Task: Conductor - User Manual Verification 'Integration & Documentation' (Protocol in workflow.md) b25f490
+
+## Phase 4: Hierarchical Mapping & Dynamic Hiring
+- [x] Task: Refactor `ModelResolver` to support hierarchical lookups (`role/task` > `role` > `default`). 22e0c21
+- [x] Task: Update `src/daemon.ts` to support loading SLAs from `company/roles/<role_family>/<task>.md`. 25555bd
+- [x] Task: Update `HireAgentTool` to accept an optional `model` and update `company/models.json`. 19df5d6
+- [x] Task: Update existing roles to use the new `company/roles/<family>/<task>.md` structure where applicable.
+- [x] Task: Verify that HR Director correctly hires hierarchical roles via `scripts/tickets/hiring-hierarchical.json`. [checkpoint: 38c7f92]
+- [x] Task: Update `tech-stack.md` to document the new hierarchical model mapping and tier-based resolution. [checkpoint: 34d1b72]
+
+## Phase 5: Loop Resilience & Monitoring
+- [x] Task: Implement `system/loop-monitor` logic to detect repetitive tool calls or lack of progress. 38c7f92
+- [x] Task: Refactor `src/daemon.ts` to use a `LOW` tier model for loop monitoring and dynamic limit extension. 38c7f92
+- [x] Task: Conductor - User Manual Verification 'Loop Resilience' (Protocol in workflow.md) [checkpoint: d1e3f8b]
+
+## Finalize Track
+- [x] Task: Conductor - User Manual Verification 'Hierarchical & Dynamic Models' (Protocol in workflow.md) [checkpoint: d1e3f8b]
+
