@@ -1,7 +1,7 @@
 # Implementation Plan: Task Chaining & Hierarchical Planning
 
 ## Phase 1: Core Infrastructure (Tickets)
-- [ ] Task: Update `src/state/base.ts` and `src/state/json.ts` to include the `Ticket` schema and CRUD operations.
+- [~] Task: Update `src/state/base.ts` and `src/state/json.ts` to include the `Ticket` schema and CRUD operations.
     - [ ] Define `Ticket` interface.
     - [ ] Implement `createTicket`, `updateTicket`, `getTicket`, `listTickets`.
 - [ ] Task: Implement `src/tools/ticket-tools.ts`.
@@ -27,3 +27,6 @@
 - [ ] Task: Perform End-to-End Validation.
     - [ ] Flow: Request -> Intake -> TPM -> Dispatch 'Define PRD' -> Product Agent -> Update Ticket -> TPM -> Dispatch 'Tech Design' -> Eng Lead.
 - [ ] Task: Conductor - User Manual Verification 'Workflow Integration' (Protocol in workflow.md)
+
+## Phase: Review Fixes
+- [x] Task: Apply review suggestions 63edff4
