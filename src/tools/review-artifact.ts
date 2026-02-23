@@ -1,0 +1,88 @@
+import fs from 'node:fs/promises';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { SchemaType } from '@google/generative-ai';
+import { BaseTool } from './base.js';
+import type { ToolDefinition } from './base.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Robust root detection:
+const PROJECT_ROOT = __dirname.includes(path.join('dist', 'src'))
+    ? path.resolve(__dirname, '..', '..', '..')
+    : path.resolve(__dirname, '..', '..');
+
+const WORK_DIR = path.join(PROJECT_ROOT, 'company', 'work');
+
+export class ReviewArtifactTool extends BaseTool {
+    get definition(): ToolDefinition {
+        return {
+            name: "review_artifact",
+            description: "Retrieves the content of a specific project artifact (PRD, Technical Design, etc.) for review.",
+            parameters: {
+                type: SchemaType.OBJECT,
+                properties: {
+                    featureId: {
+                        type: SchemaType.STRING,
+                        description: "The unique ID of the feature."
+                    },
+                    artifactType: {
+                        type: SchemaType.STRING,
+                        description: "The type of artifact to review. Options: 'workbook' (default), 'prd', 'design', 'test-plan'."
+                    }
+                },
+                required: ["featureId"]
+            }
+        };
+    }
+
+    async execute(args: { featureId: string, artifactType?: string }): Promise<string> {
+        const { featureId, artifactType = 'workbook' } = args;
+        
+        let filename = '';
+        switch (artifactType.toLowerCase()) {
+            case 'prd':
+                filename = `${featureId}-prd.md`;
+                break;
+            case 'design':
+                filename = `${featureId}-design.md`;
+                break;
+            case 'test-plan':
+                filename = `${featureId}-test-plan.md`;
+                break;
+            case 'workbook':
+            default:
+                filename = `${featureId}.md`;
+                break;
+        }
+
+        const filePath = path.join(WORK_DIR, filename);
+
+        try {
+            const content = await fs.readFile(filePath, 'utf8');
+            console.log(`📖 Executed Tool: review_artifact -> 📂 ${filename}`);
+            return content;
+        } catch (err: any) {
+            if (err.code === 'ENOENT') {
+                // Fallback: try finding the main workbook if specialized artifact missing
+                if (artifactType !== 'workbook') {
+                    console.warn(`⚠️ Artifact ${filename} not found. Falling back to main workbook.`);
+                    try {
+                        const workbookPath = path.join(WORK_DIR, `${featureId}.md`);
+                        const content = await fs.readFile(workbookPath, 'utf8');
+                        return `NOTE: Specific artifact '${filename}' not found. Returning main workbook content:
+
+${content}`;
+                    } catch (e) {}
+                }
+                return `Error: Artifact '${filename}' not found for feature '${featureId}'.`;
+            }
+            throw new Error(`Failed to read artifact: ${err.message}`);
+        }
+    }
+
+    get guidance(): string {
+        return "Use this tool to read project documents for review. Instead of guessing file paths, simply ask for the 'PRD', 'Design', or 'Test Plan' for a given feature ID. This ensures you are always looking at the correct, standardized file.";
+    }
+}

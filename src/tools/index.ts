@@ -1,19 +1,21 @@
-import { SaveFileTool } from './save-file.ts';
-import { ReplaceInFileTool } from './replace-in-file.ts';
-import { HireAgentTool } from './hire-agent.ts';
-import { ReadFileTool } from './read-file.ts';
-import { ListDirectoryTool } from './list-directory.ts';
-import { PublishMessageTool } from './publish-message.ts';
+import { SaveFileTool } from './save-file.js';
+import { ReplaceInFileTool } from './replace-in-file.js';
+import { HireAgentTool } from './hire-agent.js';
+import { ReadFileTool } from './read-file.js';
+import { ListDirectoryTool } from './list-directory.js';
+import { PublishMessageTool } from './publish-message.js';
 import { 
     InitializeFeatureWorkTool, 
     AddFeatureNoteTool, 
     ReadFeatureWorkTool 
-} from './workbook-tools.ts';
-import { SubmitForReviewTool } from './submit-for-review.ts';
-import { SubmitFeedbackTool } from './submit-feedback.ts';
-import { SubmitForApprovalTool } from './submit-for-approval.ts';
-import { ListRolesTool } from './list-roles.ts';
-import { RequestHireTool } from './request-hire.ts';
+} from './workbook-tools.js';
+import { SubmitForReviewTool } from './submit-for-review.js';
+import { SubmitFeedbackTool } from './submit-feedback.js';
+import { SubmitForApprovalTool } from './submit-for-approval.js';
+import { ListRolesTool } from './list-roles.js';
+import { RequestHireTool } from './request-hire.js';
+import { SubmitReviewResultTool } from './submit-review-result.js';
+import { ReviewArtifactTool } from './review-artifact.js';
 import type { Tool } from '@google/generative-ai';
 
 export const allTools = [
@@ -30,23 +32,27 @@ export const allTools = [
     new SubmitFeedbackTool(),
     new SubmitForApprovalTool(),
     new ListRolesTool(),
-    new RequestHireTool()
+    new RequestHireTool(),
+    new SubmitReviewResultTool(),
+    new ReviewArtifactTool()
 ];
 
 export const firmOsTools: Tool = {
     functionDeclarations: allTools.map(t => t.definition)
 };
 
-export * from './base.ts';
-export * from './save-file.ts';
-export * from './replace-in-file.ts';
-export * from './hire-agent.ts';
-export * from './read-file.ts';
-export * from './list-directory.ts';
-export * from './publish-message.ts';
-export * from './workbook-tools.ts';
-export * from './submit-for-review.ts';
-export * from './submit-feedback.ts';
-export * from './submit-for-approval.ts';
-export * from './list-roles.ts';
-export * from './request-hire.ts';
+export * from './base.js';
+export * from './save-file.js';
+export * from './replace-in-file.js';
+export * from './hire-agent.js';
+export * from './read-file.js';
+export * from './list-directory.js';
+export * from './publish-message.js';
+export * from './workbook-tools.js';
+export * from './submit-for-review.js';
+export * from './submit-feedback.js';
+export * from './submit-for-approval.js';
+export * from './list-roles.js';
+export * from './request-hire.js';
+export * from './submit-review-result.js';
+export * from './review-artifact.js';
