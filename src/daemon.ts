@@ -8,6 +8,7 @@ import dotenv from 'dotenv';
 import { firmOsTools, allTools } from './tools/index.ts';
 import { JsonStateManager } from './state/json.ts';
 import { HandoffManager } from './utils/handoff-manager.ts';
+import { ModelResolver } from './utils/model-resolver.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -28,6 +29,7 @@ const STATE_FILE = path.join(__dirname, '..', 'company', 'state', 'workflows.jso
 
 const stateManager = new JsonStateManager(STATE_FILE);
 const handoffManager = new HandoffManager();
+const modelResolver = new ModelResolver(path.join(__dirname, '..', 'company', 'models.json'));
 
 let amqpConnection: amqp.Connection | null = null;
 let amqpChannel: amqp.Channel | null = null;
@@ -111,10 +113,11 @@ export async function startDaemon() {
             isProcessing = true;
             const contentString = msg.content.toString();
             const payload = JSON.parse(contentString);
-            const { role, prompt } = payload;
+            const { role, prompt, model: modelOverride } = payload;
 
             try {
-                console.log(`\n📥 Task Received: [${role}]`);
+                const modelName = await modelResolver.resolve(role, modelOverride);
+                console.log(`\n📥 Task Received: [${role}] (Model: ${modelName})`);
                 const rolePath = path.join(__dirname, '..', 'company', 'roles', `${role}.md`);
                 const fileContent = await fs.readFile(rolePath, 'utf8');
                 
@@ -126,11 +129,26 @@ export async function startDaemon() {
 
                 console.log(`🧠 Thinking...`);
                 
-                const model = genAI.getGenerativeModel({ 
-                    model: 'gemini-2.5-flash', 
-                    systemInstruction: systemInstruction,
-                    tools: [firmOsTools] 
-                });
+                let model;
+                try {
+                    model = genAI.getGenerativeModel({ 
+                        model: modelName, 
+                        systemInstruction: systemInstruction,
+                        tools: [firmOsTools] 
+                    });
+                } catch (err: any) {
+                    console.log(`🔍 Model initialization error: ${err.message}`);
+                    if (modelName !== 'gemini-2.5-flash') {
+                        console.log(`⚠️  Fallback to default model (gemini-2.5-flash) due to error: ${err.message}`);
+                        model = genAI.getGenerativeModel({ 
+                            model: 'gemini-2.5-flash', 
+                            systemInstruction: systemInstruction,
+                            tools: [firmOsTools] 
+                        });
+                    } else {
+                        throw err;
+                    }
+                }
 
                 const chat = model.startChat();
                 let currentPrompt: string | Array<any> = prompt;
@@ -139,7 +157,24 @@ export async function startDaemon() {
 
                 while (loopCount < MAX_LOOPS) {
                     loopCount++;
-                    const result = await chat.sendMessage(currentPrompt);
+                    let result;
+                    try {
+                        result = await chat.sendMessage(currentPrompt);
+                    } catch (err: any) {
+                        console.log(`🔍 Runtime error in micro-loop: ${err.message}`);
+                        if (loopCount === 1 && modelName !== 'gemini-2.5-flash') {
+                            console.log(`⚠️  Fallback to default model (gemini-2.5-flash) due to runtime error: ${err.message}`);
+                            const fallbackModel = genAI.getGenerativeModel({ 
+                                model: 'gemini-2.5-flash', 
+                                systemInstruction: systemInstruction,
+                                tools: [firmOsTools] 
+                            });
+                            const fallbackChat = fallbackModel.startChat();
+                            result = await fallbackChat.sendMessage(prompt);
+                        } else {
+                            throw err;
+                        }
+                    }
                     const response = result.response;
                     const functionCalls = response.functionCalls();
 
