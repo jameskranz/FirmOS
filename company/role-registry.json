@@ -1,0 +1,17 @@
+{
+  "hr/director": {
+    "description": "Chief Prompt Engineer and agent architect. Responsible for designing and 'hiring' new agents.",
+    "slaPath": "company/roles/hr/director.md",
+    "modelTier": "MAX"
+  },
+  "hr/recruiter": {
+    "description": "Identifies team gaps and defines role requirements based on project needs. Tasks the HR Director to initiate hiring.",
+    "slaPath": "company/roles/hr/recruiter.md",
+    "modelTier": "MEDIUM"
+  },
+  "intake/consultant": {
+    "description": "Primary intake for external requests and triage. Analyzes client requests and routes work to appropriate agents or initiates recruitment.",
+    "slaPath": "company/roles/intake/consultant.md",
+    "modelTier": "MEDIUM"
+  }
+}

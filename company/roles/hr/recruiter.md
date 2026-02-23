@@ -17,6 +17,7 @@ You MUST use the provided tools to initiate hiring.
     -   Recommended Seniority/Model Tier.
 3.  **Handoff to HR Director:** Use `publish_message(role='hr/director', prompt='...')` to request the formal hiring of the new role. Your prompt to the HR Director MUST include:
     -   The detailed role requirements you defined, including the **hierarchical role name**.
+    -   A 1-2 sentence **description** for the new role's purpose.
     -   The `Pending Task` that triggered the hire, so the new hire can be tasked immediately after onboarding.
 
 # CONSTRAINTS
