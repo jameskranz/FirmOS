@@ -4,6 +4,11 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ---
 
-- [x] **Track: Dynamic Hiring & Task Evolution**
+- [~] **Track: Dynamic Hiring & Task Evolution**
 *Link: [./tracks/dynamic_hiring_20260222/](./tracks/dynamic_hiring_20260222/)*
+
+---
+
+- [ ] **Track: Task Chaining & Hierarchical Planning**
+*Link: [./tracks/task_chain_20260222/](./tracks/task_chain_20260222/)*
 
