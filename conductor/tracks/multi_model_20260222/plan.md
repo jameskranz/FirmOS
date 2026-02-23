@@ -1,7 +1,7 @@
 # Implementation Plan: Multi-Model Orchestration
 
 ## Phase 1: Model Registry & Resolution
-- [ ] Task: Create `company/models.json` to store role-to-model mappings.
+- [x] Task: Create `company/models.json` to store role-to-model mappings. d072416
 - [ ] Task: Implement a model resolution utility in `src/utils/model-resolver.ts`.
     - [ ] Write tests for resolution hierarchy (Ticket Override > Registry > Default).
     - [ ] Implement the resolver class to pass tests.
