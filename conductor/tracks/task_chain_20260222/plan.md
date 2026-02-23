@@ -25,13 +25,13 @@
 - [ ] Task: Conductor - User Manual Verification 'Daemon Orchestration' (Protocol in workflow.md)
 
 ## Phase 4: Role SLA Updates
-- [ ] Task: Use the 'hiring' loop to update `product-manager.md` with handoff tools.
-- [ ] Task: Use the 'hiring' loop to update `senior-systems-architect.md` with feedback tools.
+- [x] Task: Use the 'hiring' loop to update `product-manager.md` with handoff tools. 47f1080
+- [x] Task: Use the 'hiring' loop to update `senior-systems-architect.md` with feedback tools. 47f1080
 - [ ] Task: Verify that agents use the new tools correctly in their micro-loops.
 - [ ] Task: Conductor - User Manual Verification 'Role SLA Updates' (Protocol in workflow.md)
 
 ## Phase 5: Loop Validation
-- [ ] Task: Execute an end-to-end automated chain: PM (Draft) -> Architect (Review) -> PM (Revision) -> Human (Approval).
-    - [ ] Use `scripts/inspect-queue.ts` to verify correct message routing.
-    - [ ] Verify `workflows.json` state transitions.
-- [ ] Task: Conductor - User Manual Verification 'End-to-End Loop Validation' (Protocol in workflow.md)
+- [x] Task: Execute an end-to-end automated chain: PM (Draft) -> Architect (Review) -> PM (Revision) -> Human (Approval). 5393c0e
+    - [x] Use `scripts/inspect-queue.ts` to verify correct message routing.
+    - [x] Verify `workflows.json` state transitions.
+- [x] Task: Conductor - User Manual Verification 'End-to-End Loop Validation' (Protocol in workflow.md) 5393c0e
