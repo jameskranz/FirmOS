@@ -18,9 +18,22 @@ export class ModelResolver {
         try {
             const content = await fs.readFile(this.filePath, 'utf8');
             const mappings = JSON.parse(content);
+
+            // Hierarchical Lookup:
+            // a. Specific mapping (e.g., 'architect/design')
             if (mappings[role]) {
                 return mappings[role];
             }
+
+            // b. Family mapping (e.g., 'architect' for 'architect/review')
+            if (role.includes('/')) {
+                const family = role.split('/')[0];
+                if (mappings[family]) {
+                    return mappings[family];
+                }
+            }
+
+            // c. Global default
             if (mappings['default']) {
                 return mappings['default'];
             }
