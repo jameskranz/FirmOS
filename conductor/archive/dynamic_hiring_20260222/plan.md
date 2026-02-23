@@ -26,3 +26,13 @@
     - [x] Verify `recruiter` triggers `hr-director` to hire `product/define`.
     - [x] Verify `product/define` starts the feature workbook.
 - [x] Task: Conductor - User Manual Verification 'Dynamic Onboarding Flow & Validation' (Protocol in workflow.md) 83ca0d8
+
+## Phase 4: Strategic Role Management & Tool Guidance
+- [x] Task: Implement centralized `role-registry.json` with descriptions. 16befa6
+- [x] Task: Implement mandatory `guidance` property for all tools in `BaseTool`. 15313 (build)
+- [x] Task: Update HR Director with SDLC Primer and strategic hiring logic. 6c15a2a
+- [x] Task: Finalize hierarchical core role organization (`hr/director`, `hr/recruiter`, `intake/consultant`). d9e086b
+- [~] Task: Conductor - User Manual Verification 'Strategic Role Management' (Protocol in workflow.md)
+
+## Phase: Review Fixes
+- [x] Task: Apply review suggestions b28f6d8
