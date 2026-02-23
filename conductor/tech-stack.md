@@ -7,7 +7,10 @@
 
 ## AI & Orchestration
 - **Google Gemini SDK (`@google/generative-ai`):** The core intelligence engine with full TypeScript support.
-- **Gemini 2.5 Flash:** The default model for high-speed, cost-efficient reasoning.
+- **Multi-Model Orchestration:** Supports multiple Gemini model tiers (Flash, Pro) dynamically resolved per agent role.
+    - **Default Tier:** Gemini 2.5 Flash for high-speed, cost-efficient processing.
+    - **Advanced Tier:** Gemini 2.5 Pro / Gemini 3 Pro for complex reasoning and architectural design.
+- **Automated Fallback:** Built-in resilience that automatically downgrades to the default Flash model if a specialized model request fails.
 - **Native Tool Calling:** Leverages Gemini's function-calling capabilities for direct environment interaction.
 
 ## Communication & Messaging
