@@ -6,6 +6,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { JsonStateManager } from '../state/json.js';
 import { getProjectRoot } from '../utils/path-resolver.js';
+import { MessageBroker } from '../utils/message-broker.js';
 
 export class CreateTicketTool extends BaseTool {
     get definition(): ToolDefinition {
@@ -64,7 +65,7 @@ export class AssignTicketTool extends BaseTool {
     async execute(args: { ticketId: string, assignedRole: string }): Promise<string> {
         const stateFile = path.join(getProjectRoot(), 'company', 'state', 'workflows.json');
         const stateManager = new JsonStateManager(stateFile);
-        const QUEUE_NAME = 'task_routing';
+        const broker = new MessageBroker();
 
         const ticket = await stateManager.getTicket(args.ticketId);
         if (!ticket) throw new Error(`Ticket not found: ${args.ticketId}`);
@@ -74,13 +75,8 @@ export class AssignTicketTool extends BaseTool {
             status: 'Open'
         });
 
-        // Trigger work via RabbitMQ
+        // Trigger work via MessageBroker
         try {
-            const rabbitUrl = process.env.RABBITMQ_URL || 'amqp://localhost';
-            const connection = await amqp.connect(rabbitUrl);
-            const channel = await connection.createChannel();
-            await channel.assertQueue(QUEUE_NAME, { durable: true });
-
             const taskPrompt = `TICKET ASSIGNED:
 ID: ${ticket.id}
 Title: ${ticket.title}
@@ -89,16 +85,17 @@ Requirements: ${ticket.requirements || 'N/A'}
 
 Please use 'update_ticket' to mark this as 'In Progress' before you begin.`;
 
-            const payload = JSON.stringify({ role: args.assignedRole, prompt: taskPrompt });
-            channel.sendToQueue(QUEUE_NAME, Buffer.from(payload), { persistent: true });
-
-            await new Promise(r => setTimeout(r, 200));
-            await connection.close();
+            await broker.publish({
+                role: args.assignedRole,
+                prompt: taskPrompt
+            });
             
-            console.log(`🤝 Executed Tool: assign_ticket -> Assigned [${args.ticketId}] to [${args.assignedRole}]`);
+            console.log(`🤝 Executed Tool: assign_ticket -> Assigned [${args.ticketId}] to [${args.assignedRole}] (Project: ${broker.getProjectId()})`);
             return `Successfully assigned ticket ${args.ticketId} to ${args.assignedRole} and dispatched the task.`;
         } catch (err: any) {
             throw new Error(`Failed to dispatch assigned ticket: ${err.message}`);
+        } finally {
+            await broker.close();
         }
     }
 

@@ -2,6 +2,7 @@ import amqp from 'amqplib';
 import { SchemaType } from '@google/generative-ai';
 import { BaseTool } from './base.js';
 import type { ToolDefinition } from './base.js';
+import { MessageBroker } from '../utils/message-broker.js';
 
 export class PublishMessageTool extends BaseTool {
     get definition(): ToolDefinition {
@@ -34,28 +35,20 @@ export class PublishMessageTool extends BaseTool {
     }
 
     async execute(args: { role: string, prompt: string, gitInfo?: { repositoryUrl: string, branchName?: string } }): Promise<string> {
-        const { role, prompt, gitInfo } = args;
-        const QUEUE_NAME = 'task_routing';
-
+        const broker = new MessageBroker();
         try {
-            const rabbitUrl = process.env.RABBITMQ_URL || 'amqp://localhost';
-            const connection = await amqp.connect(rabbitUrl);
-            const channel = await connection.createChannel();
-            await channel.assertQueue(QUEUE_NAME, { durable: true });
-
-            const payload = JSON.stringify({ role, prompt, gitInfo });
-            channel.sendToQueue(QUEUE_NAME, Buffer.from(payload), {
-                persistent: true
+            await broker.publish({
+                role: args.role,
+                prompt: args.prompt,
+                gitInfo: args.gitInfo
             });
 
-            // Small delay to ensure message is sent
-            await new Promise(r => setTimeout(r, 200));
-            await connection.close();
-
-            console.log(`🚀 Executed Tool: publish_message -> 📨 handoff to [${role}]`);
-            return `SUCCESS: Message published to '${role}' queue.`;
+            console.log(`🚀 Executed Tool: publish_message -> 📨 handoff to [${args.role}]`);
+            return `SUCCESS: Message published to '${args.role}' queue (Project: ${broker.getProjectId()}).`;
         } catch (err: any) {
             throw new Error(`Failed to publish message: ${err.message}`);
+        } finally {
+            await broker.close();
         }
     }
 

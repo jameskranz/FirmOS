@@ -5,7 +5,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { BaseStateManager } from './base.js';
-import type { WorkflowState, WorkflowHistoryEntry, Ticket, Role } from './base.js';
+import type { WorkflowState, WorkflowHistoryEntry, Ticket, Role, CeoInteraction } from './base.js';
 import { randomUUID } from 'node:crypto';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -19,23 +19,28 @@ const PROJECT_ROOT = __dirname.includes(path.join('dist', 'src'))
 export class PostgresStateManager extends BaseStateManager {
     private pool: PoolType;
 
-    constructor(connectionString?: string) {
-        super();
+    constructor(projectId: string = 'default', connectionString?: string) {
+        super(projectId);
         this.pool = new Pool({
             connectionString: connectionString || process.env.DATABASE_URL || 'postgresql://firmos_admin:firmos_password@localhost:5432/firmos'
         }) as any;
     }
 
     async initializeSchema() {
-        const migrationPath = path.join(PROJECT_ROOT, 'src', 'state', 'migrations', '001_initial_schema.sql');
-        const sql = await fs.readFile(migrationPath, 'utf8');
+        const migrationsDir = path.join(PROJECT_ROOT, 'src', 'state', 'migrations');
+        const files = await fs.readdir(migrationsDir);
+        const sqlFiles = files.filter(f => f.endsWith('.sql')).sort();
 
         const client = await this.pool.connect();
         try {
             await client.query('BEGIN');
-            await client.query(sql);
+            for (const file of sqlFiles) {
+                const sql = await fs.readFile(path.join(migrationsDir, file), 'utf8');
+                await client.query(sql);
+                console.log(`✅ Migration applied: ${file}`);
+            }
             await client.query('COMMIT');
-            console.log('✅ Postgres schema initialized from SQL file.');
+            console.log('✅ Postgres schema fully initialized.');
         } catch (err) {
             await client.query('ROLLBACK');
             throw err;
@@ -48,8 +53,8 @@ export class PostgresStateManager extends BaseStateManager {
 
     async initializeWorkflow(state: Omit<WorkflowState, 'history' | 'updatedAt'>): Promise<void> {
         await this.pool.query(
-            'INSERT INTO workflows (feature_id, feature_name, current_agent, status, workbook_path, approvals, repository_url) VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT (feature_id) DO NOTHING',
-            [state.featureId, state.featureName, state.currentAgent, state.status, state.workbookPath, state.approvals, state.repositoryUrl]
+            'INSERT INTO workflows (project_id, feature_id, feature_name, current_agent, status, workbook_path, approvals, repository_url) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) ON CONFLICT (project_id, feature_id) DO NOTHING',
+            [this.projectId, state.featureId, state.featureName, state.currentAgent, state.status, state.workbookPath, state.approvals, state.repositoryUrl]
         );
     }
 
@@ -59,8 +64,8 @@ export class PostgresStateManager extends BaseStateManager {
             await client.query('BEGIN');
             
             // Get current workflow to append history
-            const res = await client.query('SELECT history FROM workflows WHERE feature_id = $1 FOR UPDATE', [featureId]);
-            if (res.rowCount === 0) throw new Error(`Workflow not found: ${featureId}`);
+            const res = await client.query('SELECT history FROM workflows WHERE project_id = $1 AND feature_id = $2 FOR UPDATE', [this.projectId, featureId]);
+            if (res.rowCount === 0) throw new Error(`Workflow not found: ${featureId} in project ${this.projectId}`);
             
             const currentHistory = res.rows[0].history || [];
             if (historyEntry) currentHistory.push(historyEntry);
@@ -79,8 +84,9 @@ export class PostgresStateManager extends BaseStateManager {
             setClauses.push(`history = $${i++}`); values.push(JSON.stringify(currentHistory));
             setClauses.push(`updated_at = CURRENT_TIMESTAMP`);
             
+            values.push(this.projectId);
             values.push(featureId);
-            const query = `UPDATE workflows SET ${setClauses.join(', ')} WHERE feature_id = $${i}`;
+            const query = `UPDATE workflows SET ${setClauses.join(', ')} WHERE project_id = $${i} AND feature_id = $${i+1}`;
             
             await client.query(query, values);
             await client.query('COMMIT');
@@ -93,7 +99,7 @@ export class PostgresStateManager extends BaseStateManager {
     }
 
     async getWorkflow(featureId: string): Promise<WorkflowState | null> {
-        const res = await this.pool.query('SELECT * FROM workflows WHERE feature_id = $1', [featureId]);
+        const res = await this.pool.query('SELECT * FROM workflows WHERE project_id = $1 AND feature_id = $2', [this.projectId, featureId]);
         if (res.rowCount === 0) return null;
         const row = res.rows[0];
         return {
@@ -110,7 +116,7 @@ export class PostgresStateManager extends BaseStateManager {
     }
 
     async listWorkflows(): Promise<WorkflowState[]> {
-        const res = await this.pool.query('SELECT * FROM workflows');
+        const res = await this.pool.query('SELECT * FROM workflows WHERE project_id = $1', [this.projectId]);
         return res.rows.map((row: any) => ({
             featureId: row.feature_id,
             featureName: row.feature_name,
@@ -129,8 +135,8 @@ export class PostgresStateManager extends BaseStateManager {
     async createTicket(ticketData: Omit<Ticket, 'id' | 'created' | 'updated' | 'status'>): Promise<string> {
         const id = randomUUID();
         await this.pool.query(
-            'INSERT INTO tickets (id, parent_id, title, description, requirements, repository_url, status, assigned_role) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
-            [id, ticketData.parentId, ticketData.title, ticketData.description, ticketData.requirements, ticketData.repositoryUrl, 'Open', ticketData.assignedRole]
+            'INSERT INTO tickets (id, project_id, parent_id, title, description, requirements, repository_url, status, assigned_role) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)',
+            [id, this.projectId, ticketData.parentId, ticketData.title, ticketData.description, ticketData.requirements, ticketData.repositoryUrl, 'Open', ticketData.assignedRole]
         );
         return id;
     }
@@ -146,14 +152,15 @@ export class PostgresStateManager extends BaseStateManager {
         if (updates.repositoryUrl) { setClauses.push(`repository_url = $${i++}`); values.push(updates.repositoryUrl); }
         
         setClauses.push(`updated_at = CURRENT_TIMESTAMP`);
+        values.push(this.projectId);
         values.push(ticketId);
         
-        const query = `UPDATE tickets SET ${setClauses.join(', ')} WHERE id = $${i}`;
+        const query = `UPDATE tickets SET ${setClauses.join(', ')} WHERE project_id = $${i} AND id = $${i+1}`;
         await this.pool.query(query, values);
     }
 
     async getTicket(ticketId: string): Promise<Ticket | null> {
-        const res = await this.pool.query('SELECT * FROM tickets WHERE id = $1', [ticketId]);
+        const res = await this.pool.query('SELECT * FROM tickets WHERE project_id = $1 AND id = $2', [this.projectId, ticketId]);
         if (res.rowCount === 0) return null;
         const row = res.rows[0];
         return {
@@ -173,9 +180,9 @@ export class PostgresStateManager extends BaseStateManager {
 
     async listTickets(parentId: string | null): Promise<Ticket[]> {
         const query = parentId === null 
-            ? 'SELECT * FROM tickets WHERE parent_id IS NULL'
-            : 'SELECT * FROM tickets WHERE parent_id = $1';
-        const values = parentId === null ? [] : [parentId];
+            ? 'SELECT * FROM tickets WHERE project_id = $1 AND parent_id IS NULL'
+            : 'SELECT * FROM tickets WHERE project_id = $1 AND parent_id = $2';
+        const values = parentId === null ? [this.projectId] : [this.projectId, parentId];
         
         const res = await this.pool.query(query, values);
         return res.rows.map((row: any) => ({
@@ -197,13 +204,13 @@ export class PostgresStateManager extends BaseStateManager {
 
     async upsertRole(role: Omit<Role, 'updatedAt'>): Promise<void> {
         await this.pool.query(
-            'INSERT INTO roles (role_name, description, sla_content, model_tier) VALUES ($1, $2, $3, $4) ON CONFLICT (role_name) DO UPDATE SET description = $2, sla_content = $3, model_tier = $4, updated_at = CURRENT_TIMESTAMP',
-            [role.roleName, role.description, role.slaContent, role.modelTier]
+            'INSERT INTO roles (project_id, role_name, description, sla_content, model_tier) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (project_id, role_name) DO UPDATE SET description = $3, sla_content = $4, model_tier = $5, updated_at = CURRENT_TIMESTAMP',
+            [this.projectId, role.roleName, role.description, role.slaContent, role.modelTier]
         );
     }
 
     async getRole(roleName: string): Promise<Role | null> {
-        const res = await this.pool.query('SELECT * FROM roles WHERE role_name = $1', [roleName]);
+        const res = await this.pool.query('SELECT * FROM roles WHERE project_id = $1 AND role_name = $2', [this.projectId, roleName]);
         if (res.rowCount === 0) return null;
         const row = res.rows[0];
         return {
@@ -216,13 +223,33 @@ export class PostgresStateManager extends BaseStateManager {
     }
 
     async listRoles(): Promise<Role[]> {
-        const res = await this.pool.query('SELECT * FROM roles');
+        const res = await this.pool.query('SELECT * FROM roles WHERE project_id = $1', [this.projectId]);
         return res.rows.map((row: any) => ({
             roleName: row.role_name,
             description: row.description,
             slaContent: row.sla_content,
             modelTier: row.model_tier,
             updatedAt: row.updated_at.toISOString()
+        }));
+    }
+
+    // --- CEO Memory ---
+
+    async logCeoInteraction(prompt: string, response: string): Promise<void> {
+        await this.pool.query(
+            'INSERT INTO ceo_interactions (project_id, original_prompt, ceo_response) VALUES ($1, $2, $3)',
+            [this.projectId, prompt, response]
+        );
+    }
+
+    async listCeoInteractions(): Promise<CeoInteraction[]> {
+        const res = await this.pool.query('SELECT * FROM ceo_interactions WHERE project_id = $1 ORDER BY timestamp ASC', [this.projectId]);
+        return res.rows.map((row: any) => ({
+            id: row.id,
+            projectId: row.project_id,
+            originalPrompt: row.original_prompt,
+            ceoResponse: row.ceo_response,
+            timestamp: row.timestamp.toISOString()
         }));
     }
 

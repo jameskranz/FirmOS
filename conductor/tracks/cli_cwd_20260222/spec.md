@@ -19,6 +19,17 @@ This track transforms FirmOS from a repository-bound script into a portable CLI 
 ### 2.3. Path Refactoring
 - Refactor all internal tools (e.g., `SaveFileTool`, `ListRolesTool`, `ModelResolver`) to stop using `path.resolve(__dirname, '..', '..')` and start using a globally available `getProjectRoot()` function or a singleton configuration object initialized with `process.cwd()`.
 
+### 2.4. Interactive Initialization
+- **Setup Prompt:** If `firmos start` is run in a directory with no project context, the CLI MUST offer to initialize one.
+- **Git Repository Check:**
+    - If a `.git` directory exists, the CLI SHOULD confirm if this is the project root.
+    - If no `.git` exists, the CLI MUST ask the user:
+        1. "Initialize a new local git repository here?"
+        2. "Provide a remote repository URL to clone?"
+- **Scaffolding:**
+    - Create a `.firmosrc` marker file.
+    - Create a basic `conductor/` directory if missing.
+
 ## 3. Technical Requirements
 - Create a `src/utils/path-resolver.ts` module to handle `PROJECT_ROOT` determination.
 - Update `src/daemon.ts` to initialize the path resolver.

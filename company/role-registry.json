@@ -13,5 +13,15 @@
     "description": "Primary intake for external requests and triage. Analyzes client requests and routes work to appropriate agents or initiates recruitment.",
     "slaPath": "company/roles/intake/consultant.md",
     "modelTier": "MEDIUM"
+  },
+  "ceo": {
+    "description": "The human user/owner. Receives high-level summaries, reviews, and approval requests. Use this for Human-In-The-Loop (HITL) interactions.",
+    "slaPath": "company/roles/ceo.md",
+    "modelTier": "MAX"
+  },
+  "devops/manager": {
+    "description": "Manages infrastructure and dynamic worker scaling. Uses Docker API to provision isolated containers.",
+    "slaPath": "company/roles/devops/manager.md",
+    "modelTier": "HIGH"
   }
 }

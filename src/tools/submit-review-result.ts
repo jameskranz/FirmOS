@@ -1,4 +1,3 @@
-import amqp from 'amqplib';
 import { SchemaType } from '@google/generative-ai';
 import { BaseTool } from './base.js';
 import type { ToolDefinition } from './base.js';
@@ -6,6 +5,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { JsonStateManager } from '../state/json.js';
 import { getProjectRoot } from '../utils/path-resolver.js';
+import { MessageBroker } from '../utils/message-broker.js';
 
 export class SubmitReviewResultTool extends BaseTool {
     get definition(): ToolDefinition {
@@ -41,7 +41,7 @@ export class SubmitReviewResultTool extends BaseTool {
         const { featureId, approved, note, role } = args;
         const stateFile = path.join(getProjectRoot(), 'company', 'state', 'workflows.json');
         const stateManager = new JsonStateManager(stateFile);
-        const QUEUE_NAME = 'task_routing';
+        const broker = new MessageBroker();
 
         const workflow = await stateManager.getWorkflow(featureId);
         if (!workflow) {
@@ -69,27 +69,24 @@ export class SubmitReviewResultTool extends BaseTool {
             note: `${approved ? 'APPROVED' : 'REJECTED'} by ${role}: ${note}`
         });
 
-        // Auto-notify via RabbitMQ
+        // Auto-notify via MessageBroker
         try {
-            const rabbitUrl = process.env.RABBITMQ_URL || 'amqp://localhost';
-            const connection = await amqp.connect(rabbitUrl);
-            const channel = await connection.createChannel();
-            await channel.assertQueue(QUEUE_NAME, { durable: true });
-
             const notificationPrompt = approved
                 ? `REVIEW APPROVED: The feature '${featureId}' has been approved by ${role}.\n\nNote: ${note}\n\nPlease proceed to the next phase.`
                 : `REVIEW REJECTED: The feature '${featureId}' requires changes based on feedback from ${role}.\n\nFeedback: ${note}\n\nPlease revise the artifact and resubmit.`;
 
             const targetRole = approved ? 'hr/director' : 'product/define';
             
-            const payload = JSON.stringify({ role: targetRole, prompt: notificationPrompt });
-            channel.sendToQueue(QUEUE_NAME, Buffer.from(payload), { persistent: true });
+            await broker.publish({
+                role: targetRole,
+                prompt: notificationPrompt
+            });
             
-            await new Promise(r => setTimeout(r, 200));
-            await connection.close();
-            console.log(`🚀 Auto-Notified [${targetRole}] of review result.`);
+            console.log(`🚀 Auto-Notified [${targetRole}] of review result (Project: ${broker.getProjectId()}).`);
         } catch (err) {
             console.error('Failed to send auto-notification:', err);
+        } finally {
+            await broker.close();
         }
 
         console.log(`⚖️  Review Result: [${featureId}] -> ${approved ? '✅ APPROVED' : '❌ REJECTED'} by ${role}`);

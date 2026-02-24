@@ -43,11 +43,22 @@ services:
       GEMINI_API_KEY: ${GEMINI_API_KEY}
       DATABASE_URL: postgresql://firmos_admin:firmos_password@postgres:5432/firmos
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+      # Internal URLs for sibling containers
+      RABBITMQ_URL_INTERNAL: amqp://guest:guest@firmos-rabbit:5672
+      DATABASE_URL_INTERNAL: postgresql://firmos_admin:firmos_password@firmos-db:5432/firmos
+      DOCKER_NETWORK: firmos_net
     volumes:
       - ./tmp-remotes:/tmp-remotes
+      - /var/run/docker.sock:/var/run/docker.sock
     deploy:
       replicas: 2
+    networks:
+      - firmos_net
 
 volumes:
   postgres_data:
+
+networks:
+  firmos_net:
+    driver: bridge
 

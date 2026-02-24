@@ -1,25 +1,26 @@
 # Implementation Plan: Portable CLI & CWD Context
 
 ## Phase 1: Context Resolution Infrastructure
-- [ ] Task: Create `src/utils/path-resolver.ts` to manage `PROJECT_ROOT`.
-    - [ ] Implement logic to detect `conductor/` or `.firmosrc` in `process.cwd()`.
-    - [ ] Export a `getProjectRoot()` function.
-- [ ] Task: Refactor `src/daemon.ts` to initialize and use the path resolver.
-    - [ ] Replace `__dirname` relative pathing with `getProjectRoot()`.
-    - [ ] Add startup validation (exit if not in a valid project).
-- [ ] Task: Update `package.json` to expose the CLI binary.
-    - [ ] Add `"bin": { "firmos": "./dist/src/daemon.js" }`.
-    - [ ] Add shebang to `src/daemon.ts` (and ensure it persists in build).
+- [x] Task: Create `src/utils/path-resolver.ts` to manage `PROJECT_ROOT`. [289ba74]
+    - [x] Implement logic to detect `conductor/` or `.firmosrc` in `process.cwd()`.
+    - [x] Export a `getProjectRoot()` function.
+- [x] Task: Refactor `src/daemon.ts` to initialize and use the path resolver. [7cb0faf]
+    - [x] Replace `__dirname` relative pathing with `getProjectRoot()`.
+    - [x] Implement `initializeProjectContext()` flow (Git check, `.firmosrc` creation).
+    - [x] Add startup validation (exit if not in a valid project and user declines setup).
+- [x] Task: Update `package.json` to expose the CLI binary. [7cb0faf]
+    - [x] Add `"bin": { "firmos": "./dist/src/daemon.js" }`.
+    - [x] Add shebang to `src/daemon.ts` (and ensure it persists in build).
 - [ ] Task: Conductor - User Manual Verification 'Context Resolution' (Protocol in workflow.md)
 
 ## Phase 2: Tool Refactoring
-- [ ] Task: Refactor File System Tools to use `getProjectRoot()`.
-    - [ ] `SaveFileTool`, `ReadFileTool`, `ListDirectoryTool`, `ReplaceInFileTool`.
-- [ ] Task: Refactor Role & State Tools to use `getProjectRoot()`.
-    - [ ] `HireAgentTool`, `ListRolesTool`, `ModelResolver`.
-    - [ ] `JsonStateManager` (ensure it accepts absolute paths or uses the resolver).
-    - [ ] `ReviewArtifactTool`, `SubmitReviewResultTool`.
-- [ ] Task: Verify `WorkbookTools` uses the dynamic root.
+- [x] Task: Refactor File System Tools to use `getProjectRoot()`. [7cb0faf]
+    - [x] `SaveFileTool`, `ReadFileTool`, `ListDirectoryTool`, `ReplaceInFileTool`.
+- [x] Task: Refactor Role & State Tools to use `getProjectRoot()`. [7cb0faf]
+    - [x] `HireAgentTool`, `ListRolesTool`, `ModelResolver`.
+    - [x] `JsonStateManager` (ensure it accepts absolute paths or uses the resolver).
+    - [x] `ReviewArtifactTool`, `SubmitReviewResultTool`.
+- [x] Task: Verify `WorkbookTools` uses the dynamic root. [7cb0faf]
 - [ ] Task: Conductor - User Manual Verification 'Tool Refactoring' (Protocol in workflow.md)
 
 ## Phase 3: Validation & Cleanup

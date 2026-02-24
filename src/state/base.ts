@@ -42,7 +42,21 @@ export interface Role {
     updatedAt: string;
 }
 
+export interface CeoInteraction {
+    id: string;
+    projectId: string;
+    originalPrompt: string;
+    ceoResponse: string;
+    timestamp: string;
+}
+
 export abstract class BaseStateManager {
+    protected projectId: string;
+
+    constructor(projectId: string = 'default') {
+        this.projectId = projectId;
+    }
+
     abstract initializeWorkflow(state: Omit<WorkflowState, 'history' | 'updatedAt'>): Promise<void>;
     abstract updateWorkflow(featureId: string, updates: Partial<Omit<WorkflowState, 'featureId' | 'history'>>, historyEntry?: WorkflowHistoryEntry): Promise<void>;
     abstract getWorkflow(featureId: string): Promise<WorkflowState | null>;
@@ -58,4 +72,8 @@ export abstract class BaseStateManager {
     abstract upsertRole(role: Omit<Role, 'updatedAt'>): Promise<void>;
     abstract getRole(roleName: string): Promise<Role | null>;
     abstract listRoles(): Promise<Role[]>;
+
+    // CEO Memory
+    abstract logCeoInteraction(prompt: string, response: string): Promise<void>;
+    abstract listCeoInteractions(): Promise<CeoInteraction[]>;
 }

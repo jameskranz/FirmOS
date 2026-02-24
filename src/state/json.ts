@@ -1,15 +1,15 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { BaseStateManager } from './base.js';
-import type { WorkflowState, WorkflowHistoryEntry, Ticket, Role } from './base.js';
+import type { WorkflowState, WorkflowHistoryEntry, Ticket, Role, CeoInteraction } from './base.js';
 import { randomUUID } from 'node:crypto';
 
 export class JsonStateManager extends BaseStateManager {
     private filePath: string;
     private ticketsFilePath: string;
 
-    constructor(filePath: string) {
-        super();
+    constructor(filePath: string, projectId: string = 'default') {
+        super(projectId);
         this.filePath = filePath;
         this.ticketsFilePath = path.join(path.dirname(filePath), 'tickets.json');
     }
@@ -155,6 +155,15 @@ export class JsonStateManager extends BaseStateManager {
     }
 
     async listRoles(): Promise<Role[]> {
+        return [];
+    }
+
+    // CEO Memory
+    async logCeoInteraction(prompt: string, response: string): Promise<void> {
+        // Not implemented for JSON state
+    }
+
+    async listCeoInteractions(): Promise<CeoInteraction[]> {
         return [];
     }
 }

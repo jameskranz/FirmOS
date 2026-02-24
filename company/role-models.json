@@ -2,5 +2,6 @@
   "hr/director": "MAX",
   "hr/recruiter": "MEDIUM",
   "intake/consultant": "MEDIUM",
+  "devops/manager": "HIGH",
   "default": "MEDIUM"
 }

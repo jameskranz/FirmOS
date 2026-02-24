@@ -5,6 +5,7 @@ import fsSync from 'node:fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import readline from 'node:readline/promises';
+import crypto from 'node:crypto';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import type { Tool } from '@google/generative-ai';
 import dotenv from 'dotenv';
@@ -16,6 +17,8 @@ import { ModelResolver } from './utils/model-resolver.js';
 import { LoopMonitor } from './utils/loop-monitor.js';
 import { GitClient } from './utils/git-client.js';
 import { getProjectRoot, validateProjectRoot } from './utils/path-resolver.js';
+import { eventBus, FirmOsEvent } from './utils/event-bus.js';
+import { DirectiveUpdater } from './utils/directive-updater.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -33,7 +36,7 @@ let WORKSPACE_ROOT = getProjectRoot();
 const LOGS_DIR = path.join(WORKSPACE_ROOT, 'logs');
 let logStream: fsSync.WriteStream | null = null;
 
-function setupLogging() {
+function setupLogging(tuiMode = false) {
     if (!fsSync.existsSync(LOGS_DIR)) {
         fsSync.mkdirSync(LOGS_DIR, { recursive: true });
     }
@@ -54,20 +57,26 @@ function setupLogging() {
 
     console.log = (...args: any[]) => {
         writeToLog(args, 'INFO');
-        originalLog(...args);
+        const msg = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg, null, 2) : arg).join(' ');
+        eventBus.emit(FirmOsEvent.LOG, msg);
+        if (!tuiMode) originalLog(...args);
     };
 
     console.error = (...args: any[]) => {
         writeToLog(args, 'ERROR');
-        originalError(...args);
+        const msg = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg, null, 2) : arg).join(' ');
+        eventBus.emit(FirmOsEvent.LOG, `❌ ERROR: ${msg}`);
+        if (!tuiMode) originalError(...args);
     };
 
     console.warn = (...args: any[]) => {
         writeToLog(args, 'WARN');
-        originalWarn(...args);
+        const msg = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg, null, 2) : arg).join(' ');
+        eventBus.emit(FirmOsEvent.LOG, `⚠️ WARN: ${msg}`);
+        if (!tuiMode) originalWarn(...args);
     };
 
-    console.log(`📝 Logging initialized. File: ${logFile}`);
+    if (!tuiMode) console.log(`📝 Logging initialized. File: ${logFile}`);
 }
 
 dotenv.config({ path: path.join(ENGINE_ROOT, '.env') });
@@ -79,21 +88,14 @@ if (!apiKey) {
 }
 
 const genAI = new GoogleGenerativeAI(apiKey.trim().replace(/\r/g, '')); 
-const QUEUE_NAME = 'task_routing';
-const EXTERNAL_QUEUE = 'external_requests';
-const ERROR_QUEUE = 'error_tasks';
+let PROJECT_ID = 'default';
+let QUEUE_NAME = 'task_routing';
+let EXTERNAL_QUEUE = 'external_requests';
+let ERROR_QUEUE = 'error_tasks';
+let CEO_QUEUE = 'ceo_requests';
 const PID_FILE = path.join(WORKSPACE_ROOT, 'daemon.pid');
 
-// --- State Management Selection ---
 let stateManager: any;
-if (process.env.DATABASE_URL) {
-    stateManager = new PostgresStateManager(process.env.DATABASE_URL);
-    console.log('🗄️  Using PostgreSQL for state management.');
-} else {
-    const STATE_FILE = path.join(WORKSPACE_ROOT, 'company', 'state', 'workflows.json');
-    stateManager = new JsonStateManager(STATE_FILE);
-    console.log('📄 Using JSON files for state management.');
-}
 
 const handoffManager = new HandoffManager();
 const modelResolver = new ModelResolver(path.join(WORKSPACE_ROOT, 'company', 'role-models.json'));
@@ -101,6 +103,7 @@ const modelResolver = new ModelResolver(path.join(WORKSPACE_ROOT, 'company', 'ro
 let amqpConnection: amqp.Connection | null = null;
 let amqpChannel: amqp.Channel | null = null;
 let isProcessing = false;
+let isPaused = false;
 
 async function withRetry<T>(fn: () => Promise<T>, maxAttempts = 3): Promise<T> {
     let attempt = 0;
@@ -166,6 +169,16 @@ async function processTask(role: string, prompt: string, modelOverride?: string,
         }
 
         // --- 2. Logic Execution ---
+        if (role === 'ceo') {
+            console.log(`\n👑 HITL: Routing task to [ceo] (Human User)`);
+            eventBus.emit(FirmOsEvent.CEO_REQUEST, payload);
+            await amqpChannel!.assertQueue(CEO_QUEUE, { durable: true });
+            await amqpChannel!.sendToQueue(CEO_QUEUE, Buffer.from(JSON.stringify(payload)), { persistent: true });
+            if (originalMsg) amqpChannel!.ack(originalMsg);
+            isProcessing = false;
+            return;
+        }
+
         const modelName = await modelResolver.resolve(role, modelOverride);
         console.log(`\n📥 Task Received: [${role}] (Model: ${modelName})`);
         
@@ -269,11 +282,17 @@ async function processTask(role: string, prompt: string, modelOverride?: string,
             }
             const response = result.response;
             const functionCalls = response.functionCalls();
+            const text = response.text();
+
+            if (text && text.trim()) {
+                console.log(`💭 Reasoning:\n${text}`);
+            }
 
             if (!functionCalls || functionCalls.length === 0) {
-                const text = response.text();
+                // If we already logged it as reasoning, maybe we don't need 'Text Output' label here,
+                // but let's keep it for final responses to distinguish them.
                 if (text && text.trim()) {
-                    console.log(`📝 Text Output:\n${text}`);
+                    console.log(`🏁 Final Response:\n${text}`);
                 } else if (loopCount === 1) {
                     console.log(`⚠️  Empty response received from model.`);
                 }
@@ -444,7 +463,7 @@ function generateToolDocumentation(tools: Tool): string {
     return doc;
 }
 
-async function initializeProjectContext() {
+export async function initializeProjectContext() {
     const rl = readline.createInterface({
         input: process.stdin,
         output: process.stdout
@@ -479,8 +498,9 @@ async function initializeProjectContext() {
     }
 
     // Create .firmosrc
-    await fs.writeFile(path.join(cwd, '.firmosrc'), `# FirmOS Project Configuration\ncreated_at: ${new Date().toISOString()}\n`);
-    console.log("✅ Created .firmosrc");
+    const projectId = crypto.randomUUID();
+    await fs.writeFile(path.join(cwd, '.firmosrc'), `# FirmOS Project Configuration\ncreated_at: ${new Date().toISOString()}\nproject_id: ${projectId}\n`);
+    console.log(`✅ Created .firmosrc (Project ID: ${projectId})`);
 
     // Create conductor directory if missing
     if (!fsSync.existsSync(path.join(cwd, 'conductor'))) {
@@ -492,9 +512,43 @@ async function initializeProjectContext() {
     console.log("✨ Project initialized successfully!\n");
 }
 
-export async function startDaemon() {
-    setupLogging();
+export async function startDaemon(options: { tuiMode?: boolean } = {}) {
+    setupLogging(options.tuiMode);
     await checkSingleton();
+
+    // --- Dynamic Worker Initialization ---
+    if (process.env.AUTOCLONE_REPO) {
+        console.log(`🔒 Worker pinned to repo: ${process.env.AUTOCLONE_REPO}`);
+        process.env.TARGET_WORKSPACE = '/workspace';
+        
+        // Ensure workspace directory exists
+        if (!fsSync.existsSync('/workspace')) {
+            await fs.mkdir('/workspace', { recursive: true });
+        }
+        
+        const git = new GitClient('/workspace');
+        const hasGit = await fs.stat(path.join('/workspace', '.git')).then(() => true).catch(() => false);
+        
+        if (!hasGit) {
+            console.log(`⬇️  Cloning ${process.env.AUTOCLONE_REPO}...`);
+            await git.clone(process.env.AUTOCLONE_REPO);
+        } else {
+             // Validate it's the right repo
+             const currentRemote = await git.run('remote get-url origin').then(r => r.stdout.trim()).catch(() => '');
+             if (currentRemote !== process.env.AUTOCLONE_REPO) {
+                 console.log(`⚠️  Existing repo (${currentRemote}) differs from pinned repo. Wiping...`);
+                 await fs.rm('/workspace', { recursive: true, force: true });
+                 await fs.mkdir('/workspace');
+                 await git.clone(process.env.AUTOCLONE_REPO);
+             }
+        }
+        process.chdir('/workspace');
+        WORKSPACE_ROOT = '/workspace';
+        // Create .firmosrc if missing to satisfy validation
+        if (!fsSync.existsSync(path.join(WORKSPACE_ROOT, '.firmosrc'))) {
+             await fs.writeFile(path.join(WORKSPACE_ROOT, '.firmosrc'), `# Auto-generated by Worker\n`);
+        }
+    }
 
     try {
         validateProjectRoot();
@@ -503,6 +557,29 @@ export async function startDaemon() {
         // Re-validate and update WORKSPACE_ROOT after init
         validateProjectRoot();
         WORKSPACE_ROOT = getProjectRoot();
+    }
+
+    // --- Resolve Project ID & Queues (Post-Initialization) ---
+    PROJECT_ID = process.env.PROJECT_ID || 'default';
+    if (PROJECT_ID === 'default') {
+        try {
+            const rcPath = path.join(WORKSPACE_ROOT, '.firmosrc');
+            if (fsSync.existsSync(rcPath)) {
+                const rcContent = fsSync.readFileSync(rcPath, 'utf8');
+                const match = rcContent.match(/project_id:\s*([a-zA-Z0-9-]+)/);
+                if (match) PROJECT_ID = match[1];
+            }
+        } catch (e) {}
+    }
+    
+    QUEUE_NAME = `task_routing_${PROJECT_ID}`;
+    EXTERNAL_QUEUE = `external_requests_${PROJECT_ID}`;
+    ERROR_QUEUE = `error_tasks_${PROJECT_ID}`;
+    CEO_QUEUE = `ceo_requests_${PROJECT_ID}`;
+
+    if (!options.tuiMode) {
+        console.log(`🔒 Project Context: ${PROJECT_ID}`);
+        console.log(`📨 Listening on queues: ${QUEUE_NAME}, ${EXTERNAL_QUEUE}`);
     }
 
     try {
@@ -518,14 +595,46 @@ export async function startDaemon() {
         console.log(`👂 FirmOS Orchestrator listening... [Model: gemini-2.5-flash]`);
         console.log(`🛠️  Tools loaded: [${toolNames}]`);
 
+        // --- State Management Selection ---
         if (process.env.DATABASE_URL) {
-            const stateManager = new PostgresStateManager(process.env.DATABASE_URL);
+            stateManager = new PostgresStateManager(PROJECT_ID, process.env.DATABASE_URL);
             await stateManager.initializeSchema();
-            await stateManager.disconnect();
+            console.log(`🗄️  Using PostgreSQL for state management (Project: ${PROJECT_ID}).`);
+        } else {
+            const STATE_FILE = path.join(WORKSPACE_ROOT, 'company', 'state', 'workflows.json');
+            stateManager = new JsonStateManager(STATE_FILE, PROJECT_ID);
+            console.log(`📄 Using JSON files for state management (Project: ${PROJECT_ID}).`);
         }
 
         amqpChannel!.consume(QUEUE_NAME, async (msg) => {
             if (!msg) return;
+
+            // --- Pause Logic ---
+            while (isPaused) {
+                await new Promise(r => setTimeout(r, 1000));
+            }
+
+            // --- Filter Logic ---
+            const taskFilter = process.env.TASK_FILTER;
+            if (taskFilter) {
+                // Check headers
+                const msgRepo = msg.properties.headers?.['x-repo-url'];
+                // Also check payload just in case
+                const payload = JSON.parse(msg.content.toString());
+                const payloadRepo = payload.gitInfo?.repositoryUrl;
+
+                const targetRepo = msgRepo || payloadRepo;
+                
+                // If we have a filter, and the message doesn't match it (or has no repo info), skip it.
+                // NOTE: If message has NO repo info, generic workers should pick it up. 
+                // Pinned workers should ONLY pick up matching repo info.
+                if (targetRepo !== process.env.AUTOCLONE_REPO) {
+                     // Nack with requeue so generic workers can take it
+                     amqpChannel!.nack(msg, false, true);
+                     return;
+                }
+            }
+
             const payload = JSON.parse(msg.content.toString());
             await processTask(payload.role, payload.prompt, payload.model, msg, payload.gitInfo);
         });
@@ -534,6 +643,78 @@ export async function startDaemon() {
             if (!msg) return;
             console.log(`\n📥 External Request Received -> Routing to [intake/consultant]`);
             await processTask('intake/consultant', msg.content.toString(), undefined, msg);
+        });
+
+        // Listen for CEO responses from TUI
+        eventBus.on('ceo_response', async ({ originalPayload, response }) => {
+            console.log(`\n👑 CEO Decision received for [${originalPayload.role}]`);
+            
+            // 1. Log to DB
+            if (stateManager) {
+                await stateManager.logCeoInteraction(originalPayload.prompt, response);
+            }
+
+            // 2. Update summary artifact
+            const directiveUpdater = new DirectiveUpdater(apiKey as string);
+            await directiveUpdater.updateDirectives({ 
+                prompt: originalPayload.prompt, 
+                response: response 
+            });
+
+            const payload = {
+                role: originalPayload.role,
+                prompt: `CEO FEEDBACK:\n${response}\n\nORIGINAL PROMPT:\n${originalPayload.prompt}`,
+                gitInfo: originalPayload.gitInfo
+            };
+            await amqpChannel!.sendToQueue(QUEUE_NAME, Buffer.from(JSON.stringify(payload)), { persistent: true });
+        });
+
+        // Listen for TUI task dispatch
+        eventBus.on(FirmOsEvent.DISPATCH_TASK, async (prompt) => {
+            console.log(`\n📨 TUI Dispatch: ${prompt}`);
+
+            // 1. Log to DB
+            if (stateManager) {
+                await stateManager.logCeoInteraction('Initial Task Dispatch', prompt);
+            }
+
+            // 2. Update summary artifact
+            const directiveUpdater = new DirectiveUpdater(apiKey as string);
+            await directiveUpdater.updateDirectives({ 
+                prompt: 'Initial Task Dispatch', 
+                response: prompt 
+            });
+
+            const payload = {
+                role: 'intake/consultant',
+                prompt: prompt,
+                timestamp: new Date().toISOString()
+            };
+            await amqpChannel!.sendToQueue(QUEUE_NAME, Buffer.from(JSON.stringify(payload)), { persistent: true });
+        });
+
+        // --- Control Listeners ---
+        eventBus.on(FirmOsEvent.PAUSE, () => {
+            isPaused = true;
+            console.log('⏸️  Swarm PAUSED');
+            eventBus.emit(FirmOsEvent.STATUS_UPDATE, 'PAUSED');
+        });
+
+        eventBus.on(FirmOsEvent.RESUME, () => {
+            isPaused = false;
+            console.log('▶️  Swarm RESUMED');
+            eventBus.emit(FirmOsEvent.STATUS_UPDATE, 'RUNNING');
+        });
+
+        eventBus.on(FirmOsEvent.PURGE, async () => {
+            console.log('💣 PURGING QUEUES...');
+            try {
+                await amqpChannel!.purgeQueue(QUEUE_NAME);
+                await amqpChannel!.purgeQueue(EXTERNAL_QUEUE);
+                console.log('✅ Queues purged.');
+            } catch (err: any) {
+                console.error(`❌ Purge failed: ${err.message}`);
+            }
         });
 
     } catch (error) {

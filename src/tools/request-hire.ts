@@ -1,7 +1,7 @@
-import amqp from 'amqplib';
 import { SchemaType } from '@google/generative-ai';
 import { BaseTool } from './base.js';
 import type { ToolDefinition } from './base.js';
+import { MessageBroker } from '../utils/message-broker.js';
 
 export class RequestHireTool extends BaseTool {
     get definition(): ToolDefinition {
@@ -39,14 +39,9 @@ export class RequestHireTool extends BaseTool {
 
     async execute(args: { rolePurpose: string, taskDetails: string, note?: string, gitInfo?: any }): Promise<string> {
         const { rolePurpose, taskDetails, note, gitInfo } = args;
-        const QUEUE_NAME = 'task_routing';
+        const broker = new MessageBroker();
 
         try {
-            const rabbitUrl = process.env.RABBITMQ_URL || 'amqp://localhost';
-            const connection = await amqp.connect(rabbitUrl);
-            const channel = await connection.createChannel();
-            await channel.assertQueue(QUEUE_NAME, { durable: true });
-
             const recruitmentPrompt = `HIRE REQUEST:
 Missing Specialist Role: ${rolePurpose}
 Pending Task for New Hire: ${taskDetails}
@@ -55,16 +50,18 @@ Note from Requester: ${note || 'No additional notes.'}
 
 Please identify the specific role family/task, define the requirements, and task the HR Director to evaluate the project context and determine the next logical hire according to the SDLC. Ensure the final task details are passed through to the HR Director so the new hire can be immediately tasked upon arrival.`;
 
-            const payload = JSON.stringify({ role: 'hr/recruiter', prompt: recruitmentPrompt, gitInfo });
-            channel.sendToQueue(QUEUE_NAME, Buffer.from(payload), { persistent: true });
+            await broker.publish({
+                role: 'hr/recruiter',
+                prompt: recruitmentPrompt,
+                gitInfo: gitInfo
+            });
 
-            await new Promise(r => setTimeout(r, 200));
-            await connection.close();
-
-            console.log(`🤝 Executed Tool: request_hire -> 📨 tasked [hr/recruiter] for [${rolePurpose}]`);
+            console.log(`🤝 Executed Tool: request_hire -> 📨 tasked [hr/recruiter] for [${rolePurpose}] (Project: ${broker.getProjectId()})`);
             return `SUCCESS: Hiring request for '${rolePurpose}' has been sent to the Recruiter. The system will now initiate the recruitment flow.`;
         } catch (err: any) {
             throw new Error(`Failed to request hire: ${err.message}`);
+        } finally {
+            await broker.close();
         }
     }
 
