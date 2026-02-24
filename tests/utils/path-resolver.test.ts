@@ -3,7 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 // @ts-ignore
-import { getProjectRoot, validateProjectRoot } from '../../src/utils/path-resolver.ts';
+import { getProjectRoot, validateProjectRoot } from '../../src/utils/path-resolver.js';
 
 async function testPathResolver() {
     console.log('Running path-resolver.test.ts');

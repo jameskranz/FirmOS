@@ -1,6 +1,6 @@
 import assert from 'node:assert';
 // @ts-ignore
-import { HandoffManager } from '../../src/utils/handoff-manager.ts';
+import { HandoffManager } from '../../src/utils/handoff-manager.js';
 
 console.log('Running handoff-manager.test.ts');
 

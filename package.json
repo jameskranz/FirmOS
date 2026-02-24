@@ -9,15 +9,15 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/src/daemon.js",
-    "dev": "ts-node --esm src/daemon.ts",
-    "publish": "ts-node --esm scripts/publish.ts",
-    "publish:external": "ts-node --esm scripts/publish-external.ts",
-    "reset:roles": "ts-node --esm scripts/reset-roles.ts",
-    "reset:work": "ts-node --esm scripts/reset-work.ts",
-    "reset:tickets": "ts-node --esm scripts/reset-tickets.ts",
+    "dev": "tsx src/daemon.ts",
+    "publish": "tsx scripts/publish.ts",
+    "publish:external": "tsx scripts/publish-external.ts",
+    "reset:roles": "tsx scripts/reset-roles.ts",
+    "reset:work": "tsx scripts/reset-work.ts",
+    "reset:tickets": "tsx scripts/reset-tickets.ts",
     "reset:all": "npm run reset:roles && npm run reset:work && npm run reset:tickets && npm run purge:queue",
-    "purge:queue": "ts-node --esm scripts/purge-queue.ts",
-    "test": "node tests/config.test.js && node tests/styleguide.test.js && node tests/scripts/package-scripts.test.js && ts-node --esm tests/daemon.test.ts && ts-node --esm tests/tools/index.test.ts"
+    "purge:queue": "tsx scripts/purge-queue.ts",
+    "test": "node tests/config.test.js && node tests/styleguide.test.js && node tests/scripts/package-scripts.test.js && tsx tests/daemon.test.ts && tsx tests/tools/index.test.ts"
   },
   "repository": {
     "type": "git",
@@ -42,7 +42,7 @@
     "@types/amqplib": "^0.10.8",
     "@types/node": "^25.3.0",
     "@types/pg": "^8.16.0",
-    "ts-node": "^10.9.2",
+    "tsx": "^4.21.0",
     "typescript": "^5.9.3"
   }
 }

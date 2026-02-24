@@ -1,6 +1,6 @@
 import assert from 'node:assert';
 // @ts-ignore
-import { sendTask } from '../scripts/publish.ts';
+import { sendTask } from '../scripts/publish.js';
 
 console.log('Running publish.test.ts');
 

@@ -1,6 +1,6 @@
 import assert from 'node:assert';
 // @ts-ignore
-import { firmOsTools } from '../../src/tools/index.ts';
+import { firmOsTools } from '../../src/tools/index.js';
 
 console.log('Running registration.test.ts');
 

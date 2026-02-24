@@ -1,6 +1,6 @@
 import assert from 'node:assert';
 // @ts-ignore
-import { SubmitForReviewTool } from '../../src/tools/submit-for-review.ts';
+import { SubmitForReviewTool } from '../../src/tools/submit-for-review.js';
 
 console.log('Running submit-for-review.test.ts');
 

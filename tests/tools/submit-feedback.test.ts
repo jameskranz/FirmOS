@@ -1,6 +1,6 @@
 import assert from 'node:assert';
 // @ts-ignore
-import { SubmitFeedbackTool } from '../../src/tools/submit-feedback.ts';
+import { SubmitFeedbackTool } from '../../src/tools/submit-feedback.js';
 
 console.log('Running submit-feedback.test.ts');
 

@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { exec } from 'node:child_process';
 import { promisify } from 'node:util';
 // @ts-ignore
-import { GitClient } from '../../src/utils/git-client.ts';
+import { GitClient } from '../../src/utils/git-client.js';
 
 const execAsync = promisify(exec);
 const __filename = fileURLToPath(import.meta.url);

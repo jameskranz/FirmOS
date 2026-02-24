@@ -1,6 +1,6 @@
 import assert from 'node:assert';
 // @ts-ignore
-import { BaseStateManager } from '../../src/state/base.ts';
+import { BaseStateManager } from '../../src/state/base.js';
 
 console.log('Running base.test.ts');
 

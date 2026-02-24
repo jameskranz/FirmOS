@@ -3,9 +3,9 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 // @ts-ignore
-import { CreateTicketTool, AssignTicketTool, UpdateTicketTool, ListTicketsTool } from '../../src/tools/ticket-tools.ts';
+import { CreateTicketTool, AssignTicketTool, UpdateTicketTool, ListTicketsTool } from '../../src/tools/ticket-tools.js';
 // @ts-ignore
-import { JsonStateManager } from '../../src/state/json.ts';
+import { JsonStateManager } from '../../src/state/json.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

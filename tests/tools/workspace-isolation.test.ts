@@ -3,9 +3,9 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 // @ts-ignore
-import { SaveFileTool } from '../../src/tools/save-file.ts';
+import { SaveFileTool } from '../../src/tools/save-file.js';
 // @ts-ignore
-import { ReadFileTool } from '../../src/tools/read-file.ts';
+import { ReadFileTool } from '../../src/tools/read-file.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

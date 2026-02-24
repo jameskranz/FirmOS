@@ -1,6 +1,6 @@
 import assert from 'node:assert';
 // @ts-ignore
-import { startDaemon } from '../src/daemon.ts';
+import { startDaemon } from '../src/daemon.js';
 
 console.log('Running daemon.test.ts');
 

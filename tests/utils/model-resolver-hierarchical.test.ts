@@ -3,7 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 // @ts-ignore
-import { ModelResolver } from '../../src/utils/model-resolver.ts';
+import { ModelResolver } from '../../src/utils/model-resolver.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
