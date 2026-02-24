@@ -3,5 +3,6 @@
   "hr/recruiter": "MEDIUM",
   "intake/consultant": "MEDIUM",
   "devops/manager": "HIGH",
-  "default": "MEDIUM"
+  "default": "MEDIUM",
+  "test-agent": "MEDIUM"
 }

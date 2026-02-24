@@ -5,14 +5,13 @@ let PROJECT_ROOT = process.cwd();
 
 /**
  * Validates that the current working directory is a valid FirmOS project.
- * Throws an error if no 'conductor/' directory or '.firmosrc' file is found.
+ * Throws an error if no '.firmosrc' file is found.
  */
 export function validateProjectRoot() {
     const cwd = process.cwd();
-    const hasConductor = fs.existsSync(path.join(cwd, 'conductor'));
     const hasFirmosrc = fs.existsSync(path.join(cwd, '.firmosrc'));
 
-    if (!hasConductor && !hasFirmosrc) {
+    if (!hasFirmosrc) {
         throw new Error("FirmOS context not found. Please run this command from the root of a FirmOS project.");
     }
     PROJECT_ROOT = cwd;

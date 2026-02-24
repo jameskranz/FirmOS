@@ -228,7 +228,23 @@ async function processTask(role: string, prompt: string, modelOverride?: string,
         }
         
         const toolDoc = generateToolDocumentation(firmOsTools);
-        const systemInstruction = toolDoc + systemPrompt;
+        let directiveContext = '';
+
+        // Hierarchical Directive Injection
+        if (dbRole?.managerRole) {
+            const manager = dbRole.managerRole;
+            const filename = `${manager.replace('/', '-')}.md`;
+            const directivePath = path.join(WORKSPACE_ROOT, 'company', 'work', 'directives', filename);
+            try {
+                const directives = await fs.readFile(directivePath, 'utf8');
+                directiveContext = `\n\n# MANDATORY DIRECTIVES FROM YOUR MANAGER (${manager.toUpperCase()})\n${directives}\n\n`;
+                console.log(`📋 Injected directives from [${manager}]`);
+            } catch (e) {
+                // No directives yet, that's fine
+            }
+        }
+
+        const systemInstruction = toolDoc + directiveContext + systemPrompt;
 
         console.log(`🧠 Thinking...`);
         
@@ -501,12 +517,6 @@ export async function initializeProjectContext() {
     const projectId = crypto.randomUUID();
     await fs.writeFile(path.join(cwd, '.firmosrc'), `# FirmOS Project Configuration\ncreated_at: ${new Date().toISOString()}\nproject_id: ${projectId}\n`);
     console.log(`✅ Created .firmosrc (Project ID: ${projectId})`);
-
-    // Create conductor directory if missing
-    if (!fsSync.existsSync(path.join(cwd, 'conductor'))) {
-        await fs.mkdir(path.join(cwd, 'conductor'));
-        console.log("✅ Created conductor/ directory.");
-    }
 
     rl.close();
     console.log("✨ Project initialized successfully!\n");

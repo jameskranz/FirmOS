@@ -31,6 +31,10 @@ export class HireAgentTool extends BaseTool {
                     model: {
                         type: SchemaType.STRING,
                         description: "Optional: The model tier (MAX, HIGH, MEDIUM, LOW) or specific Gemini model name. If omitted, defaults based on seniority keywords (Senior/Expert -> HIGH)."
+                    },
+                    managerRole: {
+                        type: SchemaType.STRING,
+                        description: "Optional: The hierarchical name of the role this new agent reports to. Defaults to your own role."
                     }
                 },
                 required: ["roleName", "description", "slaContent"]
@@ -38,8 +42,8 @@ export class HireAgentTool extends BaseTool {
         };
     }
 
-    async execute(args: { roleName: string, description: string, slaContent: string, model?: string }): Promise<string> {
-        const { roleName, description, slaContent, model } = args;
+    async execute(args: { roleName: string, description: string, slaContent: string, model?: string, managerRole?: string }): Promise<string> {
+        const { roleName, description, slaContent, model, managerRole } = args;
         const projectRoot = getProjectRoot();
         
         let assignedModel = model;
@@ -50,15 +54,29 @@ export class HireAgentTool extends BaseTool {
 
         // 1. Persist to Database (Primary for Swarm)
         if (process.env.DATABASE_URL) {
-            const stateManager = new PostgresStateManager(process.env.DATABASE_URL);
-            await stateManager.upsertRole({
+            const stateManager = new PostgresStateManager('default', process.env.DATABASE_URL); // Note: Project scoping needs fix here
+            // Wait, I need to fix Project Scoping in tools too.
+            // For now, I'll pass 'default' or resolve it properly.
+            
+            // RESOLVE PROJECT ID
+            let projectId = 'default';
+            try {
+                const rcPath = path.join(projectRoot, '.firmosrc');
+                const rcContent = await fs.readFile(rcPath, 'utf8');
+                const match = rcContent.match(/project_id:\s*([a-zA-Z0-9-]+)/);
+                if (match) projectId = match[1];
+            } catch (e) {}
+
+            const state = new PostgresStateManager(projectId, process.env.DATABASE_URL);
+            await state.upsertRole({
                 roleName,
                 description,
                 slaContent,
-                modelTier: assignedModel
+                modelTier: assignedModel,
+                managerRole: managerRole
             });
-            await stateManager.disconnect();
-            console.log(`🗄️  Persisted role [${roleName}] to Database.`);
+            await state.disconnect();
+            console.log(`🗄️  Persisted role [${roleName}] to Database (Project: ${projectId}, Manager: ${managerRole || 'N/A'}).`);
         }
 
         // 2. Persist to Workspace Filesystem (For VCS and local discovery)

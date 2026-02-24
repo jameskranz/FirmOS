@@ -10,35 +10,36 @@ export class DirectiveUpdater {
         this.genAI = new GoogleGenerativeAI(apiKey);
     }
 
-    async updateDirectives(interaction: { prompt: string, response: string }) {
+    async updateDirectives(interaction: { prompt: string, response: string }, managerRole: string = 'ceo') {
         const root = getProjectRoot();
-        const directivesPath = path.join(root, 'company', 'work', 'ceo-directives.md');
+        const filename = `${managerRole.replace('/', '-')}.md`;
+        const directivesPath = path.join(root, 'company', 'work', 'directives', filename);
         
         let currentDirectives = '';
         try {
             currentDirectives = await fs.readFile(directivesPath, 'utf8');
         } catch (e) {
-            currentDirectives = `# CEO Directives
+            currentDirectives = `# Directives from ${managerRole.toUpperCase()}
 
-This file contains an up-to-date summary of the CEO's mandates and strategic corrections.`;
+This file contains an up-to-date summary of mandates and strategic corrections from ${managerRole}.`;
         }
 
         const model = this.genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
         
-        const systemPrompt = `You are the System Architect for FirmOS. Your job is to maintain 'ceo-directives.md', which is the single source of truth for human mandates.
-When the CEO provides feedback, you must integrate it into the existing directives.
+        const systemPrompt = `You are the Organizational Architect for FirmOS. Your job is to maintain '${filename}', which is the single source of truth for mandates from ${managerRole}.
+When the manager provides feedback, you must integrate it into the existing directives.
 CONFLICT RESOLUTION: If the new feedback contradicts old directives, the NEW feedback takes precedence.
 FOCUS: Summarize what is TRUE NOW. Keep the document concise and actionable.
-Do not output conversational text. Output the full updated Markdown content for 'ceo-directives.md'.`;
+Do not output conversational text. Output the full updated Markdown content for '${filename}'.`;
 
         const updatePrompt = `EXISTING DIRECTIVES:
 ---
 ${currentDirectives}
 ---
 
-NEW CEO INTERACTION:
-Prompt from system: ${interaction.prompt}
-CEO Response: ${interaction.response}
+NEW INTERACTION:
+Context: ${interaction.prompt}
+Response: ${interaction.response}
 
 Update the directives now.`;
 
@@ -48,9 +49,9 @@ Update the directives now.`;
             
             await fs.mkdir(path.dirname(directivesPath), { recursive: true });
             await fs.writeFile(directivesPath, updatedContent.trim());
-            console.log('📝 CEO Directives updated successfully.');
+            console.log(`📝 Directives for [${managerRole}] updated successfully.`);
         } catch (err: any) {
-            console.error(`❌ Failed to update CEO Directives: ${err.message}`);
+            console.error(`❌ Failed to update Directives for ${managerRole}: ${err.message}`);
         }
     }
 }

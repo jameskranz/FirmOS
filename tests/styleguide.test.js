@@ -4,9 +4,9 @@ import assert from 'node:assert';
 console.log('Running styleguide.test.js');
 
 try {
-  assert.ok(fs.existsSync('./conductor/code_styleguides/typescript.md'));
-  console.log('✓ typescript.md exists');
+  assert.ok(fs.existsSync('./company/roles/hr/director.md'));
+  console.log('✓ hr/director.md exists');
 } catch (err) {
-  console.error('✗ typescript.md is missing');
+  console.error('✗ hr/director.md is missing');
   process.exit(1);
 }

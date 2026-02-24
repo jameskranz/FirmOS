@@ -60,9 +60,6 @@ async function testOnboardingFlow() {
         }
         assert.ok(rcExists, '.firmosrc should be created');
         
-        const conductorExists = await fs.stat(path.join(harness.workDir, 'conductor')).then(() => true).catch(() => false);
-        assert.ok(conductorExists, 'conductor/ directory should be created');
-        
         console.log('  ✓ Acceptance scenario passed');
         cli.kill();
 

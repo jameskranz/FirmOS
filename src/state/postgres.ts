@@ -204,8 +204,8 @@ export class PostgresStateManager extends BaseStateManager {
 
     async upsertRole(role: Omit<Role, 'updatedAt'>): Promise<void> {
         await this.pool.query(
-            'INSERT INTO roles (project_id, role_name, description, sla_content, model_tier) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (project_id, role_name) DO UPDATE SET description = $3, sla_content = $4, model_tier = $5, updated_at = CURRENT_TIMESTAMP',
-            [this.projectId, role.roleName, role.description, role.slaContent, role.modelTier]
+            'INSERT INTO roles (project_id, role_name, description, sla_content, model_tier, manager_role) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (project_id, role_name) DO UPDATE SET description = $3, sla_content = $4, model_tier = $5, manager_role = $6, updated_at = CURRENT_TIMESTAMP',
+            [this.projectId, role.roleName, role.description, role.slaContent, role.modelTier, role.managerRole || null]
         );
     }
 
@@ -218,6 +218,7 @@ export class PostgresStateManager extends BaseStateManager {
             description: row.description,
             slaContent: row.sla_content,
             modelTier: row.model_tier,
+            managerRole: row.manager_role,
             updatedAt: row.updated_at.toISOString()
         };
     }
@@ -229,6 +230,7 @@ export class PostgresStateManager extends BaseStateManager {
             description: row.description,
             slaContent: row.sla_content,
             modelTier: row.model_tier,
+            managerRole: row.manager_role,
             updatedAt: row.updated_at.toISOString()
         }));
     }

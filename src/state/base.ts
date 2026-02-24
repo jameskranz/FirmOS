@@ -39,6 +39,7 @@ export interface Role {
     description: string;
     slaContent: string;
     modelTier: string;
+    managerRole?: string;
     updatedAt: string;
 }
 

@@ -20,6 +20,7 @@ import { CreateTicketTool, AssignTicketTool, UpdateTicketTool, ListTicketsTool }
 import { ProvisionWorkerTool } from './provision-worker.js';
 import { ListWorkersTool } from './list-workers.js';
 import { TerminateWorkerTool } from './terminate-worker.js';
+import { UpdateDirectivesTool } from './update-directives.js';
 import type { Tool } from '@google/generative-ai';
 
 export const allTools = [
@@ -45,7 +46,8 @@ export const allTools = [
     new ListTicketsTool(),
     new ProvisionWorkerTool(),
     new ListWorkersTool(),
-    new TerminateWorkerTool()
+    new TerminateWorkerTool(),
+    new UpdateDirectivesTool()
 ];
 
 export const firmOsTools: Tool = {
@@ -71,3 +73,4 @@ export * from './ticket-tools.js';
 export * from './provision-worker.js';
 export * from './list-workers.js';
 export * from './terminate-worker.js';
+export * from './update-directives.js';

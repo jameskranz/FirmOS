@@ -23,5 +23,10 @@
     "description": "Manages infrastructure and dynamic worker scaling. Uses Docker API to provision isolated containers.",
     "slaPath": "company/roles/devops/manager.md",
     "modelTier": "HIGH"
+  },
+  "test-agent": {
+    "description": "A test agent for verifying hire functionality.",
+    "slaPath": "company/roles/test-agent.md",
+    "modelTier": "MEDIUM"
   }
 }

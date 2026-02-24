@@ -14,18 +14,16 @@ async function testPathResolver() {
     try {
         // 1. Test validation failure (no project structure)
         process.chdir(tempDir);
-        assert.throws(() => validateProjectRoot(), /FirmOS context not found/, 'Should throw if no conductor/ or .firmosrc');
+        assert.throws(() => validateProjectRoot(), /FirmOS context not found/, 'Should throw if no .firmosrc');
         console.log('✓ Validation failure test passed');
 
-        // 2. Test validation success with conductor/
+        // 2. Test validation failure with ONLY conductor/ (now insufficient)
         const conductorDir = path.join(tempDir, 'conductor');
         await fs.mkdir(conductorDir);
-        assert.doesNotThrow(() => validateProjectRoot(), 'Should not throw if conductor/ exists');
-        assert.strictEqual(getProjectRoot(), tempDir, 'getProjectRoot should return CWD');
-        console.log('✓ Validation success (conductor/) passed');
+        assert.throws(() => validateProjectRoot(), /FirmOS context not found/, 'Should throw if only conductor/ exists');
+        console.log('✓ Validation failure (conductor/ only) passed');
 
         // 3. Test validation success with .firmosrc
-        await fs.rmdir(conductorDir);
         const firmosrcFile = path.join(tempDir, '.firmosrc');
         await fs.writeFile(firmosrcFile, '');
         assert.doesNotThrow(() => validateProjectRoot(), 'Should not throw if .firmosrc exists');
