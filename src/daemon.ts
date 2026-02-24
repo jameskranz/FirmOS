@@ -32,6 +32,25 @@ const ENGINE_ROOT = __dirname.includes(path.join('dist', 'src'))
 // 2. WORKSPACE_ROOT: The target project we are working on (defaults to CWD)
 let WORKSPACE_ROOT = getProjectRoot();
 
+// --- Global Variables ---
+let PROJECT_ID = 'default';
+let QUEUE_NAME = 'task_routing';
+let EXTERNAL_QUEUE = 'external_requests';
+let ERROR_QUEUE = 'error_tasks';
+let CEO_QUEUE = 'ceo_requests';
+let PID_FILE: string;
+
+let stateManager: any;
+let handoffManager: HandoffManager;
+let modelResolver: ModelResolver;
+let genAI: GoogleGenerativeAI;
+let apiKey: string | undefined;
+
+let amqpConnection: amqp.Connection | null = null;
+let amqpChannel: amqp.Channel | null = null;
+let isProcessing = false;
+let isPaused = false;
+
 // --- Logging Setup ---
 const LOGS_DIR = path.join(WORKSPACE_ROOT, 'logs');
 let logStream: fsSync.WriteStream | null = null;
@@ -78,32 +97,6 @@ function setupLogging(tuiMode = false) {
 
     if (!tuiMode) console.log(`📝 Logging initialized. File: ${logFile}`);
 }
-
-dotenv.config({ path: path.join(ENGINE_ROOT, '.env') });
-
-const apiKey = process.env.GEMINI_API_KEY;
-if (!apiKey) {
-    console.error("❌ FATAL: GEMINI_API_KEY is missing from .env");
-    process.exit(1);
-}
-
-const genAI = new GoogleGenerativeAI(apiKey.trim().replace(/\r/g, '')); 
-let PROJECT_ID = 'default';
-let QUEUE_NAME = 'task_routing';
-let EXTERNAL_QUEUE = 'external_requests';
-let ERROR_QUEUE = 'error_tasks';
-let CEO_QUEUE = 'ceo_requests';
-const PID_FILE = path.join(WORKSPACE_ROOT, 'daemon.pid');
-
-let stateManager: any;
-
-const handoffManager = new HandoffManager();
-const modelResolver = new ModelResolver(path.join(WORKSPACE_ROOT, 'company', 'role-models.json'));
-
-let amqpConnection: amqp.Connection | null = null;
-let amqpChannel: amqp.Channel | null = null;
-let isProcessing = false;
-let isPaused = false;
 
 async function withRetry<T>(fn: () => Promise<T>, maxAttempts = 3): Promise<T> {
     let attempt = 0;
@@ -420,7 +413,8 @@ async function processTask(role: string, prompt: string, modelOverride?: string,
 }
 
 async function shutdown() {
-    console.log('\n🏁 Shutting down daemon...');
+    const msg = '\n🏁 Shutting down daemon...';
+    console.log(msg);
     setTimeout(() => {
         console.error('🔥 Graceful shutdown timed out. Force exiting.');
         process.exit(1);
@@ -443,14 +437,20 @@ async function shutdown() {
     process.exit(0);
 }
 
-async function checkSingleton() {
+async function checkSingleton(tuiMode = false) {
     try {
         if (await fs.access(PID_FILE).then(() => true).catch(() => false)) {
             const pid = await fs.readFile(PID_FILE, 'utf8');
             try {
                 process.kill(parseInt(pid, 10), 0);
-                console.error(`❌ FATAL: Another daemon instance is already running (PID: ${pid}).`);
-                process.exit(1);
+                const msg = `❌ FATAL: Another daemon instance is already running (PID: ${pid}).`;
+                if (tuiMode) {
+                    eventBus.emit(FirmOsEvent.LOG, msg);
+                    process.exit(1);
+                } else {
+                    console.error(msg);
+                    process.exit(1);
+                }
             } catch (e) {
                 await fs.unlink(PID_FILE).catch(() => {});
             }
@@ -458,9 +458,13 @@ async function checkSingleton() {
     } catch (e) {}
     await fs.writeFile(PID_FILE, process.pid.toString());
     process.on('exit', () => { if (fsSync.existsSync(PID_FILE)) fsSync.unlinkSync(PID_FILE); });
-    process.on('SIGINT', shutdown);
-    process.on('SIGTERM', shutdown);
-    process.on('SIGHUP', shutdown);
+    
+    if (!tuiMode) {
+        process.on('SIGINT', shutdown);
+        process.on('SIGTERM', shutdown);
+        process.on('SIGHUP', shutdown);
+    }
+    
     process.on('uncaughtException', (err) => { console.error('💥 Uncaught Exception:', err); shutdown(); });
     process.on('unhandledRejection', (reason, promise) => { console.error('💥 Unhandled Rejection at:', promise, 'reason:', reason); shutdown(); });
 }
@@ -523,8 +527,28 @@ export async function initializeProjectContext() {
 }
 
 export async function startDaemon(options: { tuiMode?: boolean } = {}) {
+    WORKSPACE_ROOT = getProjectRoot();
+    PID_FILE = path.join(WORKSPACE_ROOT, 'daemon.pid');
+
     setupLogging(options.tuiMode);
-    await checkSingleton();
+    await checkSingleton(options.tuiMode);
+
+    dotenv.config({ path: path.join(ENGINE_ROOT, '.env') });
+    apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+        const msg = "❌ FATAL: GEMINI_API_KEY is missing from .env";
+        if (options.tuiMode) {
+            eventBus.emit(FirmOsEvent.LOG, msg);
+            return;
+        } else {
+            console.error(msg);
+            process.exit(1);
+        }
+    }
+
+    genAI = new GoogleGenerativeAI(apiKey.trim().replace(/\r/g, ''));
+    handoffManager = new HandoffManager();
+    modelResolver = new ModelResolver(path.join(WORKSPACE_ROOT, 'company', 'role-models.json'));
 
     // --- Dynamic Worker Initialization ---
     if (process.env.AUTOCLONE_REPO) {
@@ -563,6 +587,10 @@ export async function startDaemon(options: { tuiMode?: boolean } = {}) {
     try {
         validateProjectRoot();
     } catch (err) {
+        if (options.tuiMode) {
+            eventBus.emit(FirmOsEvent.LOG, "⚠️ FirmOS context not found. Initialization required.");
+            return;
+        }
         await initializeProjectContext();
         // Re-validate and update WORKSPACE_ROOT after init
         validateProjectRoot();
@@ -590,6 +618,8 @@ export async function startDaemon(options: { tuiMode?: boolean } = {}) {
     if (!options.tuiMode) {
         console.log(`🔒 Project Context: ${PROJECT_ID}`);
         console.log(`📨 Listening on queues: ${QUEUE_NAME}, ${EXTERNAL_QUEUE}`);
+    } else {
+        eventBus.emit(FirmOsEvent.LOG, `🔒 Project Context: ${PROJECT_ID}`);
     }
 
     try {
@@ -602,18 +632,22 @@ export async function startDaemon(options: { tuiMode?: boolean } = {}) {
         await amqpChannel!.assertQueue(ERROR_QUEUE, { durable: true });
         
         const toolNames = (firmOsTools as any).functionDeclarations?.map((f: any) => f.name).join(', ') || 'none';
-        console.log(`👂 FirmOS Orchestrator listening... [Model: gemini-2.5-flash]`);
-        console.log(`🛠️  Tools loaded: [${toolNames}]`);
+        if (!options.tuiMode) {
+            console.log(`👂 FirmOS Orchestrator listening... [Model: gemini-2.5-flash]`);
+            console.log(`🛠️  Tools loaded: [${toolNames}]`);
+        } else {
+            eventBus.emit(FirmOsEvent.LOG, `👂 Orchestrator online (Project: ${PROJECT_ID})`);
+        }
 
         // --- State Management Selection ---
         if (process.env.DATABASE_URL) {
             stateManager = new PostgresStateManager(PROJECT_ID, process.env.DATABASE_URL);
             await stateManager.initializeSchema();
-            console.log(`🗄️  Using PostgreSQL for state management (Project: ${PROJECT_ID}).`);
+            if (!options.tuiMode) console.log(`🗄️  Using PostgreSQL for state management (Project: ${PROJECT_ID}).`);
         } else {
             const STATE_FILE = path.join(WORKSPACE_ROOT, 'company', 'state', 'workflows.json');
             stateManager = new JsonStateManager(STATE_FILE, PROJECT_ID);
-            console.log(`📄 Using JSON files for state management (Project: ${PROJECT_ID}).`);
+            if (!options.tuiMode) console.log(`📄 Using JSON files for state management (Project: ${PROJECT_ID}).`);
         }
 
         amqpChannel!.consume(QUEUE_NAME, async (msg) => {
@@ -725,6 +759,10 @@ export async function startDaemon(options: { tuiMode?: boolean } = {}) {
             } catch (err: any) {
                 console.error(`❌ Purge failed: ${err.message}`);
             }
+        });
+
+        eventBus.on(FirmOsEvent.SHUTDOWN, async () => {
+            await shutdown();
         });
 
     } catch (error) {

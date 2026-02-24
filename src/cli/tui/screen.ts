@@ -182,7 +182,12 @@ export function startTui() {
 
     // Navigation
     screen.key(['escape', 'q', 'C-c'], () => {
-        return process.exit(0);
+        eventBus.emit(FirmOsEvent.SHUTDOWN);
+    });
+
+    eventBus.on(FirmOsEvent.SHUTDOWN, () => {
+        screen.destroy();
+        process.exit(0);
     });
 
     // Tab focus switching
