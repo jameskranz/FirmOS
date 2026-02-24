@@ -4,17 +4,9 @@ import { fileURLToPath } from 'url';
 import { SchemaType } from '@google/generative-ai';
 import { BaseTool } from './base.js';
 import type { ToolDefinition } from './base.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import { getProjectRoot } from '../utils/path-resolver.js';
 
 export class ReviewArtifactTool extends BaseTool {
-    private getProjectRoot(): string {
-        return process.env.TARGET_WORKSPACE || (__dirname.includes(path.join('dist', 'src'))
-            ? path.resolve(__dirname, '..', '..', '..')
-            : path.resolve(__dirname, '..', '..'));
-    }
-
     get definition(): ToolDefinition {
         return {
             name: "review_artifact",
@@ -56,7 +48,7 @@ export class ReviewArtifactTool extends BaseTool {
                 break;
         }
 
-        const workDir = path.join(this.getProjectRoot(), 'company', 'work');
+        const workDir = path.join(getProjectRoot(), 'company', 'work');
         const filePath = path.join(workDir, filename);
 
         try {

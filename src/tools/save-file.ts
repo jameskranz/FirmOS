@@ -4,17 +4,9 @@ import { fileURLToPath } from 'node:url';
 import { SchemaType } from '@google/generative-ai';
 import { BaseTool } from './base.js';
 import type { ToolDefinition } from './base.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import { getProjectRoot } from '../utils/path-resolver.js';
 
 export class SaveFileTool extends BaseTool {
-    private getProjectRoot(): string {
-        return process.env.TARGET_WORKSPACE || (__dirname.includes(path.join('dist', 'src'))
-            ? path.resolve(__dirname, '..', '..', '..')
-            : path.resolve(__dirname, '..', '..'));
-    }
-
     get definition(): ToolDefinition {
         return {
             name: "save_file",
@@ -38,7 +30,7 @@ export class SaveFileTool extends BaseTool {
 
     async execute(args: { relativePath: string, content: string }): Promise<string> {
         const { relativePath, content } = args;
-        const fullOutputPath = path.join(this.getProjectRoot(), relativePath);
+        const fullOutputPath = path.join(getProjectRoot(), relativePath);
         
         await fs.mkdir(path.dirname(fullOutputPath), { recursive: true });
         await fs.writeFile(fullOutputPath, content.replace(/\r/g, ''));

@@ -4,20 +4,15 @@ import { fileURLToPath } from 'node:url';
 import { SchemaType } from '@google/generative-ai';
 import { BaseTool } from './base.js';
 import type { ToolDefinition } from './base.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-// Robust root detection:
-const PROJECT_ROOT = process.env.TARGET_WORKSPACE || (__dirname.includes(path.join('dist', 'src'))
-    ? path.resolve(__dirname, '..', '..', '..')
-    : path.resolve(__dirname, '..', '..'));
+import { getProjectRoot } from '../utils/path-resolver.js';
 
 function getSlug(name: string): string {
     return name.toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').trim();
 }
 
-const WORK_DIR = path.join(PROJECT_ROOT, 'company', 'work');
+function getWorkDir(): string {
+    return path.join(getProjectRoot(), 'company', 'work');
+}
 
 export class InitializeFeatureWorkTool extends BaseTool {
     get definition(): ToolDefinition {
@@ -43,9 +38,9 @@ export class InitializeFeatureWorkTool extends BaseTool {
 
     async execute(args: { featureName: string, repositoryUrl?: string }): Promise<string> {
         const slug = getSlug(args.featureName);
-        const filePath = path.join(WORK_DIR, `${slug}.md`);
+        const filePath = path.join(getWorkDir(), `${slug}.md`);
         
-        await fs.mkdir(WORK_DIR, { recursive: true });
+        await fs.mkdir(getWorkDir(), { recursive: true });
         const initialContent = `# Feature Workbook: ${args.featureName}
 
 Created: ${new Date().toISOString()}
@@ -92,7 +87,7 @@ export class AddFeatureNoteTool extends BaseTool {
 
     async execute(args: { featureName: string, noteTitle: string, content: string }): Promise<string> {
         const slug = getSlug(args.featureName);
-        const filePath = path.join(WORK_DIR, `${slug}.md`);
+        const filePath = path.join(getWorkDir(), `${slug}.md`);
         
         const entry = `
 ## ${args.noteTitle}
@@ -133,7 +128,7 @@ export class ReadFeatureWorkTool extends BaseTool {
 
     async execute(args: { featureName: string }): Promise<string> {
         const slug = getSlug(args.featureName);
-        const filePath = path.join(WORK_DIR, `${slug}.md`);
+        const filePath = path.join(getWorkDir(), `${slug}.md`);
         
         try {
             const content = await fs.readFile(filePath, 'utf8');

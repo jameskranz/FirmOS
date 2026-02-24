@@ -6,17 +6,9 @@ import { BaseTool } from './base.js';
 import type { ToolDefinition } from './base.js';
 import { PostgresStateManager } from '../state/postgres.js';
 import { JsonStateManager } from '../state/json.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import { getProjectRoot } from '../utils/path-resolver.js';
 
 export class HireAgentTool extends BaseTool {
-    private getProjectRoot(): string {
-        return process.env.TARGET_WORKSPACE || (__dirname.includes(path.join('dist', 'src'))
-            ? path.resolve(__dirname, '..', '..', '..')
-            : path.resolve(__dirname, '..', '..'));
-    }
-
     get definition(): ToolDefinition {
         return {
             name: "hire_agent",
@@ -48,7 +40,7 @@ export class HireAgentTool extends BaseTool {
 
     async execute(args: { roleName: string, description: string, slaContent: string, model?: string }): Promise<string> {
         const { roleName, description, slaContent, model } = args;
-        const projectRoot = this.getProjectRoot();
+        const projectRoot = getProjectRoot();
         
         let assignedModel = model;
         if (!assignedModel) {

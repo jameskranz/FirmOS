@@ -5,17 +5,9 @@ import type { ToolDefinition } from './base.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { JsonStateManager } from '../state/json.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import { getProjectRoot } from '../utils/path-resolver.js';
 
 export class CreateTicketTool extends BaseTool {
-    private getProjectRoot(): string {
-        return process.env.TARGET_WORKSPACE || (__dirname.includes(path.join('dist', 'src'))
-            ? path.resolve(__dirname, '..', '..', '..')
-            : path.resolve(__dirname, '..', '..'));
-    }
-
     get definition(): ToolDefinition {
         return {
             name: "create_ticket",
@@ -34,7 +26,7 @@ export class CreateTicketTool extends BaseTool {
     }
 
     async execute(args: { title: string, description: string, requirements?: string, parentId?: string }): Promise<string> {
-        const stateFile = path.join(this.getProjectRoot(), 'company', 'state', 'workflows.json');
+        const stateFile = path.join(getProjectRoot(), 'company', 'state', 'workflows.json');
         const stateManager = new JsonStateManager(stateFile);
 
         const ticketId = await stateManager.createTicket({
@@ -54,12 +46,6 @@ export class CreateTicketTool extends BaseTool {
 }
 
 export class AssignTicketTool extends BaseTool {
-    private getProjectRoot(): string {
-        return process.env.TARGET_WORKSPACE || (__dirname.includes(path.join('dist', 'src'))
-            ? path.resolve(__dirname, '..', '..', '..')
-            : path.resolve(__dirname, '..', '..'));
-    }
-
     get definition(): ToolDefinition {
         return {
             name: "assign_ticket",
@@ -76,7 +62,7 @@ export class AssignTicketTool extends BaseTool {
     }
 
     async execute(args: { ticketId: string, assignedRole: string }): Promise<string> {
-        const stateFile = path.join(this.getProjectRoot(), 'company', 'state', 'workflows.json');
+        const stateFile = path.join(getProjectRoot(), 'company', 'state', 'workflows.json');
         const stateManager = new JsonStateManager(stateFile);
         const QUEUE_NAME = 'task_routing';
 
@@ -122,12 +108,6 @@ Please use 'update_ticket' to mark this as 'In Progress' before you begin.`;
 }
 
 export class UpdateTicketTool extends BaseTool {
-    private getProjectRoot(): string {
-        return process.env.TARGET_WORKSPACE || (__dirname.includes(path.join('dist', 'src'))
-            ? path.resolve(__dirname, '..', '..', '..')
-            : path.resolve(__dirname, '..', '..'));
-    }
-
     get definition(): ToolDefinition {
         return {
             name: "update_ticket",
@@ -145,7 +125,7 @@ export class UpdateTicketTool extends BaseTool {
     }
 
     async execute(args: { ticketId: string, status: 'Open' | 'In Progress' | 'Blocked' | 'Done', outputArtifact?: string }): Promise<string> {
-        const stateFile = path.join(this.getProjectRoot(), 'company', 'state', 'workflows.json');
+        const stateFile = path.join(getProjectRoot(), 'company', 'state', 'workflows.json');
         const stateManager = new JsonStateManager(stateFile);
 
         await stateManager.updateTicket(args.ticketId, {
@@ -163,12 +143,6 @@ export class UpdateTicketTool extends BaseTool {
 }
 
 export class ListTicketsTool extends BaseTool {
-    private getProjectRoot(): string {
-        return process.env.TARGET_WORKSPACE || (__dirname.includes(path.join('dist', 'src'))
-            ? path.resolve(__dirname, '..', '..', '..')
-            : path.resolve(__dirname, '..', '..'));
-    }
-
     get definition(): ToolDefinition {
         return {
             name: "list_tickets",
@@ -186,7 +160,7 @@ export class ListTicketsTool extends BaseTool {
     }
 
     async execute(args: { parentId?: string, assignedRole?: string, status?: string }): Promise<string> {
-        const stateFile = path.join(this.getProjectRoot(), 'company', 'state', 'workflows.json');
+        const stateFile = path.join(getProjectRoot(), 'company', 'state', 'workflows.json');
         const stateManager = new JsonStateManager(stateFile);
 
         const tickets = await stateManager.listTickets(args.parentId !== undefined ? args.parentId : null);

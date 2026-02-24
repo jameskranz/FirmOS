@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "",
   "main": "dist/src/daemon.js",
+  "bin": {
+    "firmos": "./dist/src/daemon.js"
+  },
   "scripts": {
     "build": "tsc",
     "start": "node dist/src/daemon.js",

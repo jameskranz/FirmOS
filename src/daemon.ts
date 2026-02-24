@@ -1,8 +1,10 @@
+#!/usr/bin/env node
 import amqp from 'amqplib';
 import fs from 'fs/promises';
 import fsSync from 'node:fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import readline from 'node:readline/promises';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import type { Tool } from '@google/generative-ai';
 import dotenv from 'dotenv';
@@ -13,17 +15,19 @@ import { HandoffManager } from './utils/handoff-manager.js';
 import { ModelResolver } from './utils/model-resolver.js';
 import { LoopMonitor } from './utils/loop-monitor.js';
 import { GitClient } from './utils/git-client.js';
+import { getProjectRoot, validateProjectRoot } from './utils/path-resolver.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // 1. ENGINE_ROOT: Where the FirmOS engine itself is installed (e.g. /app in Docker)
+// Keep this for resolving .env and roles from the install dir if workspace doesn't have them
 const ENGINE_ROOT = __dirname.includes(path.join('dist', 'src'))
     ? path.resolve(__dirname, '..', '..')
     : path.resolve(__dirname, '..');
 
-// 2. WORKSPACE_ROOT: The target project we are working on (defaults to engine root if not provided)
-const WORKSPACE_ROOT = process.env.TARGET_WORKSPACE || ENGINE_ROOT;
+// 2. WORKSPACE_ROOT: The target project we are working on (defaults to CWD)
+let WORKSPACE_ROOT = getProjectRoot();
 
 // --- Logging Setup ---
 const LOGS_DIR = path.join(WORKSPACE_ROOT, 'logs');
@@ -440,9 +444,67 @@ function generateToolDocumentation(tools: Tool): string {
     return doc;
 }
 
+async function initializeProjectContext() {
+    const rl = readline.createInterface({
+        input: process.stdin,
+        output: process.stdout
+    });
+
+    console.log("\n🚀 Welcome to FirmOS!");
+    const answer = await rl.question("No FirmOS project found in this directory. Would you like to initialize one? (y/n): ");
+    
+    if (answer.toLowerCase() !== 'y') {
+        console.log("❌ Initialization cancelled. Exiting.");
+        process.exit(1);
+    }
+
+    const cwd = process.cwd();
+    const git = new GitClient(cwd);
+    let hasGit = fsSync.existsSync(path.join(cwd, '.git'));
+
+    if (hasGit) {
+        console.log("📂 Git repository detected.");
+    } else {
+        const gitAction = await rl.question("No git repository found. (1) Initialize new git repo, (2) Provide remote URL to clone, (3) Skip git: ");
+        if (gitAction === '1') {
+            await git.run('init');
+            console.log("✅ Initialized new git repository.");
+            hasGit = true;
+        } else if (gitAction === '2') {
+            const url = await rl.question("Enter remote repository URL: ");
+            await git.clone(url);
+            console.log("✅ Cloned repository.");
+            hasGit = true;
+        }
+    }
+
+    // Create .firmosrc
+    await fs.writeFile(path.join(cwd, '.firmosrc'), `# FirmOS Project Configuration\ncreated_at: ${new Date().toISOString()}\n`);
+    console.log("✅ Created .firmosrc");
+
+    // Create conductor directory if missing
+    if (!fsSync.existsSync(path.join(cwd, 'conductor'))) {
+        await fs.mkdir(path.join(cwd, 'conductor'));
+        console.log("✅ Created conductor/ directory.");
+    }
+
+    rl.close();
+    console.log("✨ Project initialized successfully!\n");
+}
+
 export async function startDaemon() {
     setupLogging();
     await checkSingleton();
+
+    try {
+        validateProjectRoot();
+    } catch (err) {
+        await initializeProjectContext();
+        // Re-validate and update WORKSPACE_ROOT after init
+        validateProjectRoot();
+        WORKSPACE_ROOT = getProjectRoot();
+    }
+
     try {
         const rabbitUrl = process.env.RABBITMQ_URL || 'amqp://localhost';
         amqpConnection = await amqp.connect(rabbitUrl) as any;

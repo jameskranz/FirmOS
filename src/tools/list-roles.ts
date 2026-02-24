@@ -5,17 +5,9 @@ import { SchemaType } from '@google/generative-ai';
 import { BaseTool } from './base.js';
 import type { ToolDefinition } from './base.js';
 import { PostgresStateManager } from '../state/postgres.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import { getProjectRoot } from '../utils/path-resolver.js';
 
 export class ListRolesTool extends BaseTool {
-    private getProjectRoot(): string {
-        return process.env.TARGET_WORKSPACE || (__dirname.includes(path.join('dist', 'src'))
-            ? path.resolve(__dirname, '..', '..', '..')
-            : path.resolve(__dirname, '..', '..'));
-    }
-
     get definition(): ToolDefinition {
         return {
             name: "list_roles",
@@ -44,7 +36,7 @@ export class ListRolesTool extends BaseTool {
 
         // 2. Fallback to Workspace JSON if DB is empty or missing
         if (roles.length === 0) {
-            const projectRoot = this.getProjectRoot();
+            const projectRoot = getProjectRoot();
             const registryPath = path.join(projectRoot, 'company', 'role-registry.json');
             try {
                 const content = await fs.readFile(registryPath, 'utf8');

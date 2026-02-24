@@ -4,17 +4,9 @@ import { fileURLToPath } from 'node:url';
 import { SchemaType } from '@google/generative-ai';
 import { BaseTool } from './base.js';
 import type { ToolDefinition } from './base.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import { getProjectRoot } from '../utils/path-resolver.js';
 
 export class ListDirectoryTool extends BaseTool {
-    private getProjectRoot(): string {
-        return process.env.TARGET_WORKSPACE || (__dirname.includes(path.join('dist', 'src'))
-            ? path.resolve(__dirname, '..', '..', '..')
-            : path.resolve(__dirname, '..', '..'));
-    }
-
     get definition(): ToolDefinition {
         return {
             name: "list_directory",
@@ -34,7 +26,7 @@ export class ListDirectoryTool extends BaseTool {
 
     async execute(args: { relativePath: string }): Promise<string> {
         const { relativePath } = args;
-        const fullPath = path.join(this.getProjectRoot(), relativePath);
+        const fullPath = path.join(getProjectRoot(), relativePath);
         
         try {
             const items = await fs.readdir(fullPath);

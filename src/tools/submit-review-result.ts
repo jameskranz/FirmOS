@@ -5,17 +5,9 @@ import type { ToolDefinition } from './base.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { JsonStateManager } from '../state/json.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import { getProjectRoot } from '../utils/path-resolver.js';
 
 export class SubmitReviewResultTool extends BaseTool {
-    private getProjectRoot(): string {
-        return process.env.TARGET_WORKSPACE || (__dirname.includes(path.join('dist', 'src'))
-            ? path.resolve(__dirname, '..', '..', '..')
-            : path.resolve(__dirname, '..', '..'));
-    }
-
     get definition(): ToolDefinition {
         return {
             name: "submit_review_result",
@@ -47,7 +39,7 @@ export class SubmitReviewResultTool extends BaseTool {
 
     async execute(args: { featureId: string, approved: boolean, note: string, role: string }): Promise<string> {
         const { featureId, approved, note, role } = args;
-        const stateFile = path.join(this.getProjectRoot(), 'company', 'state', 'workflows.json');
+        const stateFile = path.join(getProjectRoot(), 'company', 'state', 'workflows.json');
         const stateManager = new JsonStateManager(stateFile);
         const QUEUE_NAME = 'task_routing';
 
