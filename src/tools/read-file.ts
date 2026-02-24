@@ -8,12 +8,13 @@ import type { ToolDefinition } from './base.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Robust root detection:
-const PROJECT_ROOT = __dirname.includes(path.join('dist', 'src'))
-    ? path.resolve(__dirname, '..', '..', '..')
-    : path.resolve(__dirname, '..', '..');
-
 export class ReadFileTool extends BaseTool {
+    private getProjectRoot(): string {
+        return process.env.TARGET_WORKSPACE || (__dirname.includes(path.join('dist', 'src'))
+            ? path.resolve(__dirname, '..', '..', '..')
+            : path.resolve(__dirname, '..', '..'));
+    }
+
     get definition(): ToolDefinition {
         return {
             name: "read_file",
@@ -33,7 +34,7 @@ export class ReadFileTool extends BaseTool {
 
     async execute(args: { relativePath: string }): Promise<string> {
         const { relativePath } = args;
-        const fullPath = path.join(PROJECT_ROOT, relativePath);
+        const fullPath = path.join(this.getProjectRoot(), relativePath);
         
         try {
             const content = await fs.readFile(fullPath, 'utf8');

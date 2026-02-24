@@ -14,6 +14,7 @@ export interface WorkflowState {
     currentAgent: string;
     status: WorkflowStatus;
     workbookPath: string;
+    repositoryUrl?: string;
     approvals: Record<string, { approved: boolean, timestamp: string, note?: string }>;
     history: WorkflowHistoryEntry[];
     updatedAt: string;
@@ -25,11 +26,20 @@ export interface Ticket {
     title: string;
     description: string;
     requirements?: string;
+    repositoryUrl?: string;
     status: 'Open' | 'In Progress' | 'Blocked' | 'Done';
     assignedRole?: string;
     outputArtifact?: string;
     created: string;
     updated: string;
+}
+
+export interface Role {
+    roleName: string;
+    description: string;
+    slaContent: string;
+    modelTier: string;
+    updatedAt: string;
 }
 
 export abstract class BaseStateManager {
@@ -43,4 +53,9 @@ export abstract class BaseStateManager {
     abstract updateTicket(ticketId: string, updates: Partial<Omit<Ticket, 'id' | 'created'>>): Promise<void>;
     abstract getTicket(ticketId: string): Promise<Ticket | null>;
     abstract listTickets(parentId: string | null): Promise<Ticket[]>;
+
+    // Role Management
+    abstract upsertRole(role: Omit<Role, 'updatedAt'>): Promise<void>;
+    abstract getRole(roleName: string): Promise<Role | null>;
+    abstract listRoles(): Promise<Role[]>;
 }

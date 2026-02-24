@@ -9,11 +9,9 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Robust root detection:
-// 1. If we are in dist/src/tools, root is three levels up
-// 2. If we are in src/tools, root is two levels up
-const PROJECT_ROOT = __dirname.includes(path.join('dist', 'src'))
+const PROJECT_ROOT = process.env.TARGET_WORKSPACE || (__dirname.includes(path.join('dist', 'src'))
     ? path.resolve(__dirname, '..', '..', '..')
-    : path.resolve(__dirname, '..', '..');
+    : path.resolve(__dirname, '..', '..'));
 
 function getSlug(name: string): string {
     return name.toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').trim();
@@ -32,6 +30,10 @@ export class InitializeFeatureWorkTool extends BaseTool {
                     featureName: {
                         type: SchemaType.STRING,
                         description: "The human-readable name of the feature, e.g., 'Multi-Queue Routing'."
+                    },
+                    repositoryUrl: {
+                        type: SchemaType.STRING,
+                        description: "Optional: The Git repository URL where the feature work will reside."
                     }
                 },
                 required: ["featureName"]
@@ -39,7 +41,7 @@ export class InitializeFeatureWorkTool extends BaseTool {
         };
     }
 
-    async execute(args: { featureName: string }): Promise<string> {
+    async execute(args: { featureName: string, repositoryUrl?: string }): Promise<string> {
         const slug = getSlug(args.featureName);
         const filePath = path.join(WORK_DIR, `${slug}.md`);
         
@@ -47,13 +49,14 @@ export class InitializeFeatureWorkTool extends BaseTool {
         const initialContent = `# Feature Workbook: ${args.featureName}
 
 Created: ${new Date().toISOString()}
+Repository: ${args.repositoryUrl || 'N/A'}
 
 ---
 `;
         
         await fs.writeFile(filePath, initialContent);
         console.log(`📝 Initialized workbook: ${slug}.md`);
-        return `SUCCESS: Workbook initialized. featureId='${slug}', path='company/work/${slug}.md'`;
+        return `SUCCESS: Workbook initialized. featureId='${slug}', path='company/work/${slug}.md'${args.repositoryUrl ? `, repositoryUrl='${args.repositoryUrl}'` : ''}`;
     }
 
     get guidance(): string {

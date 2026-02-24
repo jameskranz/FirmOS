@@ -8,14 +8,13 @@ import type { ToolDefinition } from './base.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Robust root detection:
-const PROJECT_ROOT = __dirname.includes(path.join('dist', 'src'))
-    ? path.resolve(__dirname, '..', '..', '..')
-    : path.resolve(__dirname, '..', '..');
-
-const WORK_DIR = path.join(PROJECT_ROOT, 'company', 'work');
-
 export class ReviewArtifactTool extends BaseTool {
+    private getProjectRoot(): string {
+        return process.env.TARGET_WORKSPACE || (__dirname.includes(path.join('dist', 'src'))
+            ? path.resolve(__dirname, '..', '..', '..')
+            : path.resolve(__dirname, '..', '..'));
+    }
+
     get definition(): ToolDefinition {
         return {
             name: "review_artifact",
@@ -57,7 +56,8 @@ export class ReviewArtifactTool extends BaseTool {
                 break;
         }
 
-        const filePath = path.join(WORK_DIR, filename);
+        const workDir = path.join(this.getProjectRoot(), 'company', 'work');
+        const filePath = path.join(workDir, filename);
 
         try {
             const content = await fs.readFile(filePath, 'utf8');
@@ -69,11 +69,9 @@ export class ReviewArtifactTool extends BaseTool {
                 if (artifactType !== 'workbook') {
                     console.warn(`⚠️ Artifact ${filename} not found. Falling back to main workbook.`);
                     try {
-                        const workbookPath = path.join(WORK_DIR, `${featureId}.md`);
+                        const workbookPath = path.join(workDir, `${featureId}.md`);
                         const content = await fs.readFile(workbookPath, 'utf8');
-                        return `NOTE: Specific artifact '${filename}' not found. Returning main workbook content:
-
-${content}`;
+                        return `NOTE: Specific artifact '${filename}' not found. Returning main workbook content:\n\n${content}`;
                     } catch (e) {}
                 }
                 return `Error: Artifact '${filename}' not found for feature '${featureId}'.`;

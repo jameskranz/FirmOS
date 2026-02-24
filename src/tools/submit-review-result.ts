@@ -9,16 +9,13 @@ import { JsonStateManager } from '../state/json.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Robust root detection:
-const PROJECT_ROOT = __dirname.includes(path.join('dist', 'src'))
-    ? path.resolve(__dirname, '..', '..', '..')
-    : path.resolve(__dirname, '..', '..');
-
-const STATE_FILE = path.join(PROJECT_ROOT, 'company', 'state', 'workflows.json');
-const stateManager = new JsonStateManager(STATE_FILE);
-const QUEUE_NAME = 'task_routing';
-
 export class SubmitReviewResultTool extends BaseTool {
+    private getProjectRoot(): string {
+        return process.env.TARGET_WORKSPACE || (__dirname.includes(path.join('dist', 'src'))
+            ? path.resolve(__dirname, '..', '..', '..')
+            : path.resolve(__dirname, '..', '..'));
+    }
+
     get definition(): ToolDefinition {
         return {
             name: "submit_review_result",
@@ -50,6 +47,9 @@ export class SubmitReviewResultTool extends BaseTool {
 
     async execute(args: { featureId: string, approved: boolean, note: string, role: string }): Promise<string> {
         const { featureId, approved, note, role } = args;
+        const stateFile = path.join(this.getProjectRoot(), 'company', 'state', 'workflows.json');
+        const stateManager = new JsonStateManager(stateFile);
+        const QUEUE_NAME = 'task_routing';
 
         const workflow = await stateManager.getWorkflow(featureId);
         if (!workflow) {
@@ -63,7 +63,7 @@ export class SubmitReviewResultTool extends BaseTool {
             note
         };
 
-        const nextAgent = approved ? 'system' : 'product/define'; // Simplify for now, ideally dynamic
+        const nextAgent = approved ? 'system' : 'product/define';
         const status = approved ? workflow.status : 'revising';
 
         await stateManager.updateWorkflow(featureId, {
@@ -79,7 +79,8 @@ export class SubmitReviewResultTool extends BaseTool {
 
         // Auto-notify via RabbitMQ
         try {
-            const connection = await amqp.connect('amqp://localhost');
+            const rabbitUrl = process.env.RABBITMQ_URL || 'amqp://localhost';
+            const connection = await amqp.connect(rabbitUrl);
             const channel = await connection.createChannel();
             await channel.assertQueue(QUEUE_NAME, { durable: true });
 
@@ -87,7 +88,7 @@ export class SubmitReviewResultTool extends BaseTool {
                 ? `REVIEW APPROVED: The feature '${featureId}' has been approved by ${role}.\n\nNote: ${note}\n\nPlease proceed to the next phase.`
                 : `REVIEW REJECTED: The feature '${featureId}' requires changes based on feedback from ${role}.\n\nFeedback: ${note}\n\nPlease revise the artifact and resubmit.`;
 
-            const targetRole = approved ? 'hr/director' : 'product/define'; // Default routing
+            const targetRole = approved ? 'hr/director' : 'product/define';
             
             const payload = JSON.stringify({ role: targetRole, prompt: notificationPrompt });
             channel.sendToQueue(QUEUE_NAME, Buffer.from(payload), { persistent: true });

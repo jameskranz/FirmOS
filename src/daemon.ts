@@ -8,22 +8,25 @@ import type { Tool } from '@google/generative-ai';
 import dotenv from 'dotenv';
 import { firmOsTools, allTools } from './tools/index.js';
 import { JsonStateManager } from './state/json.js';
+import { PostgresStateManager } from './state/postgres.js';
 import { HandoffManager } from './utils/handoff-manager.js';
 import { ModelResolver } from './utils/model-resolver.js';
 import { LoopMonitor } from './utils/loop-monitor.js';
+import { GitClient } from './utils/git-client.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Robust root detection:
-// 1. If we are in dist/src, root is two levels up
-// 2. If we are in src, root is one level up
-const PROJECT_ROOT = __dirname.includes(path.join('dist', 'src'))
+// 1. ENGINE_ROOT: Where the FirmOS engine itself is installed (e.g. /app in Docker)
+const ENGINE_ROOT = __dirname.includes(path.join('dist', 'src'))
     ? path.resolve(__dirname, '..', '..')
     : path.resolve(__dirname, '..');
 
+// 2. WORKSPACE_ROOT: The target project we are working on (defaults to engine root if not provided)
+const WORKSPACE_ROOT = process.env.TARGET_WORKSPACE || ENGINE_ROOT;
+
 // --- Logging Setup ---
-const LOGS_DIR = path.join(PROJECT_ROOT, 'logs');
+const LOGS_DIR = path.join(WORKSPACE_ROOT, 'logs');
 let logStream: fsSync.WriteStream | null = null;
 
 function setupLogging() {
@@ -63,7 +66,7 @@ function setupLogging() {
     console.log(`📝 Logging initialized. File: ${logFile}`);
 }
 
-dotenv.config({ path: path.join(PROJECT_ROOT, '.env') });
+dotenv.config({ path: path.join(ENGINE_ROOT, '.env') });
 
 const apiKey = process.env.GEMINI_API_KEY;
 if (!apiKey) {
@@ -75,12 +78,21 @@ const genAI = new GoogleGenerativeAI(apiKey.trim().replace(/\r/g, ''));
 const QUEUE_NAME = 'task_routing';
 const EXTERNAL_QUEUE = 'external_requests';
 const ERROR_QUEUE = 'error_tasks';
-const PID_FILE = path.join(PROJECT_ROOT, 'daemon.pid');
-const STATE_FILE = path.join(PROJECT_ROOT, 'company', 'state', 'workflows.json');
+const PID_FILE = path.join(WORKSPACE_ROOT, 'daemon.pid');
 
-const stateManager = new JsonStateManager(STATE_FILE);
+// --- State Management Selection ---
+let stateManager: any;
+if (process.env.DATABASE_URL) {
+    stateManager = new PostgresStateManager(process.env.DATABASE_URL);
+    console.log('🗄️  Using PostgreSQL for state management.');
+} else {
+    const STATE_FILE = path.join(WORKSPACE_ROOT, 'company', 'state', 'workflows.json');
+    stateManager = new JsonStateManager(STATE_FILE);
+    console.log('📄 Using JSON files for state management.');
+}
+
 const handoffManager = new HandoffManager();
-const modelResolver = new ModelResolver(path.join(PROJECT_ROOT, 'company', 'role-models.json'));
+const modelResolver = new ModelResolver(path.join(WORKSPACE_ROOT, 'company', 'role-models.json'));
 
 let amqpConnection: amqp.Connection | null = null;
 let amqpChannel: amqp.Channel | null = null;
@@ -95,8 +107,7 @@ async function withRetry<T>(fn: () => Promise<T>, maxAttempts = 3): Promise<T> {
             attempt++;
             const isRateLimit = err.message?.includes('429') || err.message?.includes('Too Many Requests');
             if (isRateLimit && attempt < maxAttempts) {
-                // Try to parse retryDelay from the error message if it looks like JSON or has a known pattern
-                let delayMs = 15000; // Default 15s
+                let delayMs = 15000;
                 const retryMatch = err.message?.match(/retry in ([\d\.]+)s/);
                 if (retryMatch) {
                     delayMs = Math.ceil(parseFloat(retryMatch[1]) * 1000) + 1000;
@@ -112,42 +123,95 @@ async function withRetry<T>(fn: () => Promise<T>, maxAttempts = 3): Promise<T> {
     throw new Error('Max retry attempts reached');
 }
 
-async function processTask(role: string, prompt: string, modelOverride?: string, originalMsg?: amqp.ConsumeMessage) {
+async function processTask(role: string, prompt: string, modelOverride?: string, originalMsg?: amqp.ConsumeMessage, gitInfo?: { repositoryUrl: string, branchName?: string }) {
     isProcessing = true;
-    const payload = { role, prompt, model: modelOverride };
+    const payload = { role, prompt, model: modelOverride, gitInfo };
 
     try {
-        const modelName = await modelResolver.resolve(role, modelOverride);
-        console.log(`\n📥 Task Received: [${role}] (Model: ${modelName})`);
-        
-        // SLA Resolution Hierarchy:
-        // 1. Hierarchical (e.g. company/roles/architect/design.md)
-        // 2. Legacy/Flat (e.g. company/roles/senior-systems-architect.md)
-        let rolePath = path.join(PROJECT_ROOT, 'company', 'roles', `${role}.md`);
-        if (role.includes('/')) {
-            const familyTaskPath = path.join(PROJECT_ROOT, 'company', 'roles', `${role}.md`);
-            try {
-                await fs.access(familyTaskPath);
-                rolePath = familyTaskPath;
-            } catch {
-                // If role/task.md doesn't exist, check if the family has a base SLA
-                const familyBase = path.join(PROJECT_ROOT, 'company', 'roles', `${role.split('/')[0]}.md`);
+        // --- 1. Workspace Sync (Git) ---
+        if (gitInfo?.repositoryUrl && process.env.TARGET_WORKSPACE) {
+            console.log(`🌀 Syncing workspace: ${gitInfo.repositoryUrl}`);
+            const git = new GitClient(process.env.TARGET_WORKSPACE);
+            
+            const hasGit = await fs.stat(path.join(process.env.TARGET_WORKSPACE, '.git')).then(() => true).catch(() => false);
+            
+            if (!hasGit) {
+                console.log(`Workspace not a git repo. Wiping and cloning...`);
+                await fs.rm(process.env.TARGET_WORKSPACE, { recursive: true, force: true });
+                await git.clone(gitInfo.repositoryUrl);
+            } else {
                 try {
-                    await fs.access(familyBase);
-                    rolePath = familyBase;
-                } catch {
-                    // Keep default rolePath and let it fail if not found
+                    const currentRemote = await git.run('remote get-url origin').then(r => r.stdout.trim());
+                    if (currentRemote !== gitInfo.repositoryUrl) {
+                        console.log(`Repository mismatch (${currentRemote} vs ${gitInfo.repositoryUrl}). Wiping workspace...`);
+                        await fs.rm(process.env.TARGET_WORKSPACE, { recursive: true, force: true });
+                        await git.clone(gitInfo.repositoryUrl);
+                    } else {
+                        await git.pull();
+                    }
+                } catch (e) {
+                     console.log(`Git check failed. Forcing re-clone...`);
+                     await fs.rm(process.env.TARGET_WORKSPACE, { recursive: true, force: true });
+                     await git.clone(gitInfo.repositoryUrl);
                 }
+            }
+
+            if (gitInfo.branchName) {
+                await git.checkout(gitInfo.branchName, true);
             }
         }
 
-        const fileContent = await fs.readFile(rolePath, 'utf8');
+        // --- 2. Logic Execution ---
+        const modelName = await modelResolver.resolve(role, modelOverride);
+        console.log(`\n📥 Task Received: [${role}] (Model: ${modelName})`);
         
-        // Inject dynamic tool documentation
-        const toolDoc = generateToolDocumentation(firmOsTools);
-        const systemInstruction = toolDoc + fileContent;
+        let systemPrompt = '';
+        
+        const dbRole = await stateManager.getRole(role);
+        if (dbRole) {
+            systemPrompt = dbRole.slaContent;
+            console.log(`📖 Loaded SLA for [${role}] from Database (${systemPrompt.length} chars)`);
+        } else {
+            const findSLA = async (root: string) => {
+                let rolePath = path.join(root, 'company', 'roles', `${role}.md`);
+                if (role.includes('/')) {
+                    const familyTaskPath = path.join(root, 'company', 'roles', `${role}.md`);
+                    try {
+                        await fs.access(familyTaskPath);
+                        return familyTaskPath;
+                    } catch {
+                        const familyBase = path.join(root, 'company', 'roles', `${role.split('/')[0]}.md`);
+                        try {
+                            await fs.access(familyBase);
+                            return familyBase;
+                        } catch {}
+                    }
+                }
+                try { await fs.access(rolePath); return rolePath; } catch { return null; }
+            };
 
-        console.log(`📖 Loaded SLA for [${role}] (${fileContent.length} chars) + injected tool docs.`);
+            const workspacePath = await findSLA(WORKSPACE_ROOT);
+            const enginePath = await findSLA(ENGINE_ROOT);
+            const finalPath = workspacePath || enginePath;
+
+            if (finalPath) {
+                systemPrompt = await fs.readFile(finalPath, 'utf8');
+                console.log(`📖 Loaded SLA for [${role}] from File [${finalPath === workspacePath ? 'Workspace' : 'Engine'}] (${systemPrompt.length} chars)`);
+            } else {
+                console.log(`⚠️  Role [${role}] not found in DB, Workspace, or Engine. Routing to [hr/recruiter] for dynamic hiring.`);
+                if (role !== 'hr/recruiter') {
+                    const retryPrompt = `DYNAMIC HIRE REQUIRED: Role [${role}] is missing. Please evaluate the project context and hire this role.\n\nOriginal Task:\n${prompt}`;
+                    const payload = JSON.stringify({ role: 'hr/recruiter', prompt: retryPrompt, gitInfo });
+                    amqpChannel?.sendToQueue(QUEUE_NAME, Buffer.from(payload), { persistent: true });
+                }
+                if (originalMsg) amqpChannel?.ack(originalMsg);
+                isProcessing = false;
+                return;
+            }
+        }
+        
+        const toolDoc = generateToolDocumentation(firmOsTools);
+        const systemInstruction = toolDoc + systemPrompt;
 
         console.log(`🧠 Thinking...`);
         
@@ -209,12 +273,11 @@ async function processTask(role: string, prompt: string, modelOverride?: string,
                 } else if (loopCount === 1) {
                     console.log(`⚠️  Empty response received from model.`);
                 }
-                break; // Exit loop if no more tool calls
+                break;
             }
 
             console.log(`🔧 [Loop ${loopCount}/${maxLoops}] Executing ${functionCalls.length} tool call(s)...`);
             
-            // Check if we are approaching the limit and might need an extension
             if (loopCount === maxLoops && maxLoops < 15) {
                 console.log(`👁️‍🗨️  Analyzing loop progress...`);
                 const history = await chat.getHistory();
@@ -241,7 +304,6 @@ async function processTask(role: string, prompt: string, modelOverride?: string,
                             }
                         });
 
-                        // Check for specialized tool effects
                         if (call.name === 'initialize_feature_work') {
                             const slug = (call.args as any).featureName.toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').trim();
                             await stateManager.initializeWorkflow({
@@ -250,12 +312,12 @@ async function processTask(role: string, prompt: string, modelOverride?: string,
                                 currentAgent: role,
                                 status: 'drafting',
                                 workbookPath: `company/work/${slug}.md`,
+                                repositoryUrl: (call.args as any).repositoryUrl,
                                 approvals: {}
                             });
                             console.log(`✨ [State] Initialized tracking for feature '${slug}'.`);
                         }
 
-                        // Check for handoff intent
                         const handoffConfig = handoffManager.getHandoffConfig(call.name, call.args);
                         if (handoffConfig) {
                             const { featureId } = call.args as any;
@@ -263,7 +325,6 @@ async function processTask(role: string, prompt: string, modelOverride?: string,
                             
                             console.log(`📡 [Handoff] Routing feature '${featureId}' to ${handoffConfig.targetRole}...`);
                             
-                            // 1. Update State
                             await stateManager.updateWorkflow(featureId, {
                                 currentAgent: handoffConfig.targetRole,
                                 status: handoffConfig.nextStatus
@@ -275,9 +336,8 @@ async function processTask(role: string, prompt: string, modelOverride?: string,
                                 note: (call.args as any).note || (call.args as any).feedback
                             });
 
-                            // 2. Publish next task (if not human gate)
                             if (handoffConfig.targetRole !== 'human') {
-                                const payload = JSON.stringify({ role: handoffConfig.targetRole, prompt: nextPrompt });
+                                const payload = JSON.stringify({ role: handoffConfig.targetRole, prompt: nextPrompt, gitInfo });
                                 amqpChannel!.sendToQueue(QUEUE_NAME, Buffer.from(payload), { persistent: true });
                                 console.log(`🚀 [Handoff] Published task for ${handoffConfig.targetRole}.`);
                             } else {
@@ -297,8 +357,6 @@ async function processTask(role: string, prompt: string, modelOverride?: string,
                     console.error(`⚠️  Unknown tool requested: ${call.name}`);
                 }
             }
-
-            // Feed tool results back for the next turn
             currentPrompt = toolResponses;
         }
 
@@ -310,25 +368,7 @@ async function processTask(role: string, prompt: string, modelOverride?: string,
         if (originalMsg) amqpChannel!.ack(originalMsg);
     } catch (error: any) {
         console.error(`❌ Error:`, error.message);
-        
-        const isFatal = error.message.includes('401') || 
-                       error.message.includes('403') ||
-                       error.code === 'EACCES';
-
-        if (error.code === 'ENOENT' || error.message.includes('not found')) {
-            console.log(`⚠️  Role [${role}] not found. Routing to [hr/recruiter] for dynamic hiring.`);
-            const recruitmentPrompt = `The system attempted to task the role '${role}', but no SLA for this role was found. 
-            
-Original Task intended for '${role}':
-${prompt}
-
-            Please identify the gap, define the requirements for '${role}', and task the HR Director to hire them.`;
-            
-            const recoveryPayload = JSON.stringify({ role: 'hr/recruiter', prompt: recruitmentPrompt });
-            await amqpChannel!.sendToQueue(QUEUE_NAME, Buffer.from(recoveryPayload), { persistent: true });            if (originalMsg) amqpChannel!.ack(originalMsg);
-            return;
-        }
-
+        const isFatal = error.message.includes('401') || error.message.includes('403') || error.code === 'EACCES';
         if (isFatal) {
             await amqpChannel!.sendToQueue(ERROR_QUEUE, Buffer.from(JSON.stringify({ payload, error: error.message })), { persistent: true });
             if (originalMsg) amqpChannel!.ack(originalMsg);
@@ -342,14 +382,11 @@ ${prompt}
 
 async function shutdown() {
     console.log('\n🏁 Shutting down daemon...');
-    
-    // Set a hard timeout to force exit if cleanup hangs
     setTimeout(() => {
         console.error('🔥 Graceful shutdown timed out. Force exiting.');
         process.exit(1);
     }, 15000).unref();
 
-    // Wait for current task to finish if processing
     if (isProcessing) {
         console.log('⏳ Waiting for active task to complete...');
         let waitCount = 0;
@@ -364,8 +401,6 @@ async function shutdown() {
         if (amqpConnection) await (amqpConnection as any).close();
         if (logStream) logStream.end();
     } catch (e) {}
-    
-    // Exit handler will handle PID cleanup via unlinkSync
     process.exit(0);
 }
 
@@ -378,59 +413,29 @@ async function checkSingleton() {
                 console.error(`❌ FATAL: Another daemon instance is already running (PID: ${pid}).`);
                 process.exit(1);
             } catch (e) {
-                // Process not running, we can take over and remove stale PID file
                 await fs.unlink(PID_FILE).catch(() => {});
             }
         }
-    } catch (e) {
-        // Error reading PID file, assume it's safe to proceed
-    }
-    
+    } catch (e) {}
     await fs.writeFile(PID_FILE, process.pid.toString());
-    
-    // Ensure PID is cleaned up on exit
-    process.on('exit', () => {
-        if (fsSync.existsSync(PID_FILE)) {
-            fsSync.unlinkSync(PID_FILE);
-        }
-    });
-
-    // Handle signals
+    process.on('exit', () => { if (fsSync.existsSync(PID_FILE)) fsSync.unlinkSync(PID_FILE); });
     process.on('SIGINT', shutdown);
     process.on('SIGTERM', shutdown);
     process.on('SIGHUP', shutdown);
-    process.on('uncaughtException', (err) => {
-        console.error('💥 Uncaught Exception:', err);
-        shutdown();
-    });
-    process.on('unhandledRejection', (reason, promise) => {
-        console.error('💥 Unhandled Rejection at:', promise, 'reason:', reason);
-        shutdown();
-    });
+    process.on('uncaughtException', (err) => { console.error('💥 Uncaught Exception:', err); shutdown(); });
+    process.on('unhandledRejection', (reason, promise) => { console.error('💥 Unhandled Rejection at:', promise, 'reason:', reason); shutdown(); });
 }
 
-/**
- * Generates a Markdown documentation block from the Tool definitions.
- * This is injected into agent prompts so they always know what tools are available.
- */
 function generateToolDocumentation(tools: Tool): string {
     let doc = "# PLATFORM CAPABILITIES (AUTO-INJECTED)\n\n";
     doc += "You operate in a tool-enabled environment. The following function calls are available to you:\n\n";
-    
     (tools as any).functionDeclarations?.forEach((fn: any) => {
         const toolInstance = allTools.find(t => t.definition.name === fn.name);
-        
-        doc += `## Tool: ${fn.name}\n`;
-        doc += `Description: ${fn.description}\n`;
-        
-        if (toolInstance?.guidance) {
-            doc += `Usage Guidance: ${toolInstance.guidance}\n`;
-        }
-
+        doc += `## Tool: ${fn.name}\nDescription: ${fn.description}\n`;
+        if (toolInstance?.guidance) doc += `Usage Guidance: ${toolInstance.guidance}\n`;
         doc += "Parameters (JSON Schema):\n";
         doc += `\`\`\`json\n${JSON.stringify(fn.parameters, null, 2)}\n\`\`\`\n\n`;
     });
-
     doc += "---\n\n";
     return doc;
 }
@@ -439,7 +444,8 @@ export async function startDaemon() {
     setupLogging();
     await checkSingleton();
     try {
-        amqpConnection = await amqp.connect('amqp://localhost') as any;
+        const rabbitUrl = process.env.RABBITMQ_URL || 'amqp://localhost';
+        amqpConnection = await amqp.connect(rabbitUrl) as any;
         amqpChannel = await (amqpConnection as any).createChannel();
         
         await amqpChannel!.assertQueue(QUEUE_NAME, { durable: true });
@@ -450,20 +456,22 @@ export async function startDaemon() {
         console.log(`👂 FirmOS Orchestrator listening... [Model: gemini-2.5-flash]`);
         console.log(`🛠️  Tools loaded: [${toolNames}]`);
 
-        // 1. Internal Task Queue
+        if (process.env.DATABASE_URL) {
+            const stateManager = new PostgresStateManager(process.env.DATABASE_URL);
+            await stateManager.initializeSchema();
+            await stateManager.disconnect();
+        }
+
         amqpChannel!.consume(QUEUE_NAME, async (msg) => {
             if (!msg) return;
-            const contentString = msg.content.toString();
-            const payload = JSON.parse(contentString);
-            await processTask(payload.role, payload.prompt, payload.model, msg);
+            const payload = JSON.parse(msg.content.toString());
+            await processTask(payload.role, payload.prompt, payload.model, msg, payload.gitInfo);
         });
 
-        // 2. External Request Queue
         amqpChannel!.consume(EXTERNAL_QUEUE, async (msg) => {
             if (!msg) return;
-            const requestText = msg.content.toString();
             console.log(`\n📥 External Request Received -> Routing to [intake/consultant]`);
-            await processTask('intake/consultant', requestText, undefined, msg);
+            await processTask('intake/consultant', msg.content.toString(), undefined, msg);
         });
 
     } catch (error) {
@@ -471,7 +479,6 @@ export async function startDaemon() {
     }
 }
 
-// Only start the daemon if this file is run directly
 const isMain = process.argv[1] && (path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url)));
 if (isMain) {
     startDaemon();

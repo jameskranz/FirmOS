@@ -7,17 +7,25 @@ export class PublishMessageTool extends BaseTool {
     get definition(): ToolDefinition {
         return {
             name: "publish_message",
-            description: "Publishes a JSON task to a RabbitMQ queue. Use this to hand off work to another agent role.",
+            description: "Publishes a task or information to another role's queue. Use this for department handoffs.",
             parameters: {
                 type: SchemaType.OBJECT,
                 properties: {
                     role: {
                         type: SchemaType.STRING,
-                        description: "The target agent role, e.g., 'senior-systems-architect'."
+                        description: "The hierarchical role name to target, e.g., 'hr/director', 'architect/design'."
                     },
                     prompt: {
                         type: SchemaType.STRING,
-                        description: "The detailed task description for the target agent."
+                        description: "The detailed instruction or information for the target role."
+                    },
+                    gitInfo: {
+                        type: SchemaType.OBJECT,
+                        description: "Optional: Git context for multi-tenant routing.",
+                        properties: {
+                            repositoryUrl: { type: SchemaType.STRING },
+                            branchName: { type: SchemaType.STRING }
+                        }
                     }
                 },
                 required: ["role", "prompt"]
@@ -25,25 +33,27 @@ export class PublishMessageTool extends BaseTool {
         };
     }
 
-    async execute(args: { role: string, prompt: string }): Promise<string> {
-        const { role, prompt } = args;
+    async execute(args: { role: string, prompt: string, gitInfo?: { repositoryUrl: string, branchName?: string } }): Promise<string> {
+        const { role, prompt, gitInfo } = args;
         const QUEUE_NAME = 'task_routing';
 
         try {
-            const connection = await amqp.connect('amqp://localhost');
+            const rabbitUrl = process.env.RABBITMQ_URL || 'amqp://localhost';
+            const connection = await amqp.connect(rabbitUrl);
             const channel = await connection.createChannel();
             await channel.assertQueue(QUEUE_NAME, { durable: true });
 
-            const payload = JSON.stringify({ role, prompt });
-            channel.sendToQueue(QUEUE_NAME, Buffer.from(payload), { persistent: true });
+            const payload = JSON.stringify({ role, prompt, gitInfo });
+            channel.sendToQueue(QUEUE_NAME, Buffer.from(payload), {
+                persistent: true
+            });
 
-            console.log(`🚀 Executed Tool: publish_message -> 📨 handoff to [${role}]`);
-            
-            // Short delay to ensure message is sent
+            // Small delay to ensure message is sent
             await new Promise(r => setTimeout(r, 200));
             await connection.close();
-            
-            return `Successfully published handoff message to ${role}`;
+
+            console.log(`🚀 Executed Tool: publish_message -> 📨 handoff to [${role}]`);
+            return `SUCCESS: Message published to '${role}' queue.`;
         } catch (err: any) {
             throw new Error(`Failed to publish message: ${err.message}`);
         }

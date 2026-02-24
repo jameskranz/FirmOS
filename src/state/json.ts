@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { BaseStateManager } from './base.js';
-import type { WorkflowState, WorkflowHistoryEntry, Ticket } from './base.js';
+import type { WorkflowState, WorkflowHistoryEntry, Ticket, Role } from './base.js';
 import { randomUUID } from 'node:crypto';
 
 export class JsonStateManager extends BaseStateManager {
@@ -143,5 +143,18 @@ export class JsonStateManager extends BaseStateManager {
             // List children of a specific parent
             return allTickets.filter(t => t.parentId === parentId);
         }
+    }
+
+    // Role Management (Stub/Legacy Sync handled by tools for JSON)
+    async upsertRole(role: Omit<Role, 'updatedAt'>): Promise<void> {
+        // Legacy tools already write to role-registry.json
+    }
+
+    async getRole(roleName: string): Promise<Role | null> {
+        return null;
+    }
+
+    async listRoles(): Promise<Role[]> {
+        return [];
     }
 }
