@@ -4,8 +4,8 @@ import contrib from 'blessed-contrib';
 export function createLayout(screen: blessed.Widgets.Screen) {
     const grid = new contrib.grid({ rows: 12, cols: 12, screen: screen });
 
-    // Top Left: Live Logs (8x9)
-    const log = grid.set(0, 0, 8, 9, contrib.log, {
+    // Left Column: Live Logs (8x6)
+    const log = grid.set(0, 0, 8, 6, contrib.log, {
         fg: "green",
         selectedFg: "green",
         label: ' Swarm Logs ',
@@ -13,6 +13,20 @@ export function createLayout(screen: blessed.Widgets.Screen) {
         scrollbar: { ch: ' ', track: { bg: 'cyan' }, style: { inverse: true } }
     });
 
+    // Middle Column: Tickets (8x3)
+    const ticketList = grid.set(0, 6, 8, 3, blessed.list, {
+        label: ' Tickets ',
+        keys: true,
+        vi: true,
+        style: {
+            selected: { bg: 'magenta' },
+            border: { fg: 'magenta' }
+        },
+        border: { type: 'line' },
+        scrollbar: { ch: ' ', track: { bg: 'magenta' }, style: { inverse: true } }
+    });
+
+    // Right Column: Sidebar (Status, Agents, CEO)
     // Top Right Status (1x3)
     const status = grid.set(0, 9, 1, 3, blessed.text, {
         label: ' Status ',
@@ -73,5 +87,5 @@ export function createLayout(screen: blessed.Widgets.Screen) {
         border: { type: 'line', fg: 'white' }
     });
 
-    return { log, status, agentList, hitlInbox, queueMonitor, inputBar };
+    return { log, ticketList, status, agentList, hitlInbox, queueMonitor, inputBar };
 }

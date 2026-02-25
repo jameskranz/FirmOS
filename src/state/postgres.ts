@@ -7,12 +7,14 @@ import { fileURLToPath } from 'node:url';
 import { BaseStateManager } from './base.js';
 import type { WorkflowState, WorkflowHistoryEntry, Ticket, Role, CeoInteraction } from './base.js';
 import { randomUUID } from 'node:crypto';
+import { getProjectRoot } from '../utils/path-resolver.js';
+import { MigrationManager } from './migration-manager.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Robust root detection:
-const PROJECT_ROOT = __dirname.includes(path.join('dist', 'src'))
+const ENGINE_ROOT = __dirname.includes(path.join('dist', 'src'))
     ? path.resolve(__dirname, '..', '..', '..')
     : path.resolve(__dirname, '..', '..');
 
@@ -27,26 +29,8 @@ export class PostgresStateManager extends BaseStateManager {
     }
 
     async initializeSchema() {
-        const migrationsDir = path.join(PROJECT_ROOT, 'src', 'state', 'migrations');
-        const files = await fs.readdir(migrationsDir);
-        const sqlFiles = files.filter(f => f.endsWith('.sql')).sort();
-
-        const client = await this.pool.connect();
-        try {
-            await client.query('BEGIN');
-            for (const file of sqlFiles) {
-                const sql = await fs.readFile(path.join(migrationsDir, file), 'utf8');
-                await client.query(sql);
-                console.log(`✅ Migration applied: ${file}`);
-            }
-            await client.query('COMMIT');
-            console.log('✅ Postgres schema fully initialized.');
-        } catch (err) {
-            await client.query('ROLLBACK');
-            throw err;
-        } finally {
-            client.release();
-        }
+        const manager = new MigrationManager(this.pool as any, ENGINE_ROOT);
+        await manager.migrate();
     }
 
     // --- Workflows ---
@@ -200,12 +184,29 @@ export class PostgresStateManager extends BaseStateManager {
         }));
     }
 
+    async listAllTickets(): Promise<Ticket[]> {
+        const res = await this.pool.query('SELECT * FROM tickets WHERE project_id = $1', [this.projectId]);
+        return res.rows.map((row: any) => ({
+            id: row.id,
+            parentId: row.parent_id,
+            title: row.title,
+            description: row.description,
+            requirements: row.requirements,
+            repositoryUrl: row.repository_url,
+            status: row.status as any,
+            assignedRole: row.assigned_role,
+            outputArtifact: row.output_artifact,
+            created: row.created_at.toISOString(),
+            updated: row.updated_at.toISOString()
+        }));
+    }
+
     // --- Roles ---
 
     async upsertRole(role: Omit<Role, 'updatedAt'>): Promise<void> {
         await this.pool.query(
-            'INSERT INTO roles (project_id, role_name, description, sla_content, model_tier, manager_role) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (project_id, role_name) DO UPDATE SET description = $3, sla_content = $4, model_tier = $5, manager_role = $6, updated_at = CURRENT_TIMESTAMP',
-            [this.projectId, role.roleName, role.description, role.slaContent, role.modelTier, role.managerRole || null]
+            'INSERT INTO roles (project_id, role_name, description, sla_content, model_tier, manager_role, allowed_tools) VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT (project_id, role_name) DO UPDATE SET description = $3, sla_content = $4, model_tier = $5, manager_role = $6, allowed_tools = $7, updated_at = CURRENT_TIMESTAMP',
+            [this.projectId, role.roleName, role.description, role.slaContent, role.modelTier, role.managerRole || null, role.allowedTools ? JSON.stringify(role.allowedTools) : null]
         );
     }
 
@@ -219,6 +220,7 @@ export class PostgresStateManager extends BaseStateManager {
             slaContent: row.sla_content,
             modelTier: row.model_tier,
             managerRole: row.manager_role,
+            allowedTools: row.allowed_tools,
             updatedAt: row.updated_at.toISOString()
         };
     }
@@ -231,6 +233,7 @@ export class PostgresStateManager extends BaseStateManager {
             slaContent: row.sla_content,
             modelTier: row.model_tier,
             managerRole: row.manager_role,
+            allowedTools: row.allowed_tools,
             updatedAt: row.updated_at.toISOString()
         }));
     }
@@ -253,6 +256,40 @@ export class PostgresStateManager extends BaseStateManager {
             ceoResponse: row.ceo_response,
             timestamp: row.timestamp.toISOString()
         }));
+    }
+
+    // --- Directives ---
+
+    async upsertDirective(roleName: string, content: string): Promise<void> {
+        await this.pool.query(
+            'INSERT INTO directives (project_id, role_name, content) VALUES ($1, $2, $3) ON CONFLICT (project_id, role_name) DO UPDATE SET content = $3, updated_at = CURRENT_TIMESTAMP',
+            [this.projectId, roleName, content]
+        );
+    }
+
+    async getDirective(roleName: string): Promise<string | null> {
+        const res = await this.pool.query('SELECT content FROM directives WHERE project_id = $1 AND role_name = $2', [this.projectId, roleName]);
+        if (res.rowCount === 0) return null;
+        return res.rows[0].content;
+    }
+
+    async purgeProjectData(): Promise<void> {
+        const client = await this.pool.connect();
+        try {
+            await client.query('BEGIN');
+            await client.query('DELETE FROM workflows WHERE project_id = $1', [this.projectId]);
+            await client.query('DELETE FROM tickets WHERE project_id = $1', [this.projectId]);
+            await client.query('DELETE FROM roles WHERE project_id = $1', [this.projectId]);
+            await client.query('DELETE FROM ceo_interactions WHERE project_id = $1', [this.projectId]);
+            await client.query('DELETE FROM directives WHERE project_id = $1', [this.projectId]);
+            await client.query('COMMIT');
+            console.log(`🧹 Purged all data for project [${this.projectId}] from Database.`);
+        } catch (err) {
+            await client.query('ROLLBACK');
+            throw err;
+        } finally {
+            client.release();
+        }
     }
 
     async disconnect() {

@@ -140,6 +140,11 @@ export function startTui() {
         }
     });
 
+    screen.key(['b', 'B'], () => {
+        panels.log.log('🌱 Triggering bootstrap from seed PRD...');
+        eventBus.emit(FirmOsEvent.BOOTSTRAP_SEED);
+    });
+
     eventBus.on(FirmOsEvent.STATUS_UPDATE, (newStatus: string) => {
         panels.status.setContent(` ${newStatus} `);
         panels.status.style.fg = newStatus === 'RUNNING' ? 'green' : 'yellow';
@@ -179,10 +184,51 @@ export function startTui() {
     panels.agentList.clearItems();
     panels.hitlInbox.clearItems();
     panels.hitlInbox.addItem('No pending requests');
+    panels.ticketList.clearItems();
+    panels.ticketList.addItem('Loading tickets...');
 
     // Navigation
     screen.key(['escape', 'q', 'C-c'], () => {
-        eventBus.emit(FirmOsEvent.SHUTDOWN);
+        const question = blessed.question({
+            parent: screen,
+            border: 'line',
+            height: 'shrink',
+            width: 'half',
+            top: 'center',
+            left: 'center',
+            label: ' Exit FirmOS ',
+            content: 'How would you like to exit?\n\n[D] Detach (Keep swarm running)\n[S] Shutdown (Stop everything)',
+            keys: true,
+            vi: true,
+            style: {
+                fg: 'white',
+                bg: 'black',
+                border: { fg: 'blue' },
+                label: { fg: 'yellow' }
+            }
+        });
+
+        question.ask('', (err, value) => {
+            // value is the string of the answer if using input, but we use hotkeys
+        });
+
+        // Add custom key listeners to the question box
+        question.key(['d', 'D'], () => {
+            screen.destroy();
+            process.exit(0);
+        });
+
+        question.key(['s', 'S'], () => {
+            eventBus.emit(FirmOsEvent.SHUTDOWN);
+        });
+
+        question.key(['escape', 'q'], () => {
+            question.destroy();
+            screen.render();
+        });
+
+        question.focus();
+        screen.render();
     });
 
     eventBus.on(FirmOsEvent.SHUTDOWN, () => {
@@ -191,7 +237,7 @@ export function startTui() {
     });
 
     // Tab focus switching
-    const focusable = [panels.agentList, panels.hitlInbox, panels.inputBar];
+    const focusable = [panels.agentList, panels.ticketList, panels.hitlInbox, panels.inputBar];
     let focusIndex = 0;
 
     screen.key(['tab'], () => {
@@ -199,6 +245,104 @@ export function startTui() {
         focusable[focusIndex].focus();
         screen.render();
     });
+
+    // --- Ticket Logic ---
+    let allTickets: any[] = [];
+
+    async function refreshTickets() {
+        eventBus.emit('request_tickets');
+    }
+
+    eventBus.on('tickets_list', (tickets: any[]) => {
+        allTickets = tickets;
+        panels.ticketList.clearItems();
+        
+        if (tickets.length === 0) {
+            panels.ticketList.addItem('No tickets found');
+        } else {
+            // Build hierarchy
+            const ticketMap = new Map();
+            tickets.forEach(t => ticketMap.set(t.id, { ...t, children: [] }));
+            
+            const roots: any[] = [];
+            tickets.forEach(t => {
+                if (t.parentId && ticketMap.has(t.parentId)) {
+                    ticketMap.get(t.parentId).children.push(ticketMap.get(t.id));
+                } else {
+                    roots.push(ticketMap.get(t.id));
+                }
+            });
+
+            const renderNode = (node: any, depth: number) => {
+                const indent = '  '.repeat(depth);
+                const statusIcon = node.status === 'Done' ? '✅' : node.status === 'In Progress' ? '🚧' : '⏳';
+                panels.ticketList.addItem(`${indent}${statusIcon} ${node.title} (${node.id.substring(0,8)})`);
+                node.children.forEach((child: any) => renderNode(child, depth + 1));
+            };
+
+            roots.forEach(root => renderNode(root, 0));
+        }
+        screen.render();
+    });
+
+    // Handle selection in Ticket List
+    panels.ticketList.on('select', (item: any, index: number) => {
+        const content = item.getContent();
+        const idMatch = content.match(/\(([a-f0-9-]+)\)$/); // Match UUID segment
+        if (!idMatch) return;
+        const shortId = idMatch[1];
+        const ticket = allTickets.find(t => t.id.startsWith(shortId));
+        
+        if (!ticket) return;
+
+        const modal = blessed.box({
+            parent: screen,
+            keys: true,
+            left: 'center',
+            top: 'center',
+            width: '80%',
+            height: '80%',
+            bg: 'black',
+            border: { type: 'line', fg: 'magenta' as any },
+            label: ` Ticket Details: ${ticket.id} `,
+            scrollable: true,
+            alwaysScroll: true,
+            scrollbar: { ch: ' ', track: { bg: 'cyan' }, style: { inverse: true } }
+        });
+
+        const details = `
+TITLE: ${ticket.title}
+STATUS: ${ticket.status}
+ROLE: ${ticket.assignedRole || 'Unassigned'}
+
+DESCRIPTION:
+${ticket.description}
+
+REQUIREMENTS:
+${ticket.requirements || 'N/A'}
+
+ARTIFACT: ${ticket.outputArtifact || 'N/A'}
+REPO: ${ticket.repositoryUrl || 'N/A'}
+`;
+
+        blessed.text({
+            parent: modal,
+            top: 1,
+            left: 2,
+            width: '95%',
+            content: details
+        });
+
+        modal.key(['escape', 'q'], () => {
+            modal.detach();
+            screen.render();
+        });
+
+        modal.focus();
+        screen.render();
+    });
+
+    setInterval(refreshTickets, 10000); // Refresh every 10s
 
     // --- Input Bar Logic ---
     screen.key(['i', 'd'], () => {

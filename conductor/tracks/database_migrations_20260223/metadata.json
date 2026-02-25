@@ -1,0 +1,8 @@
+{
+  "track_id": "database_migrations_20260223",
+  "type": "feature",
+  "status": "new",
+  "created_at": "2026-02-23T23:50:00Z",
+  "updated_at": "2026-02-23T23:50:00Z",
+  "description": "Implement robust, trackable database migrations with a dedicated history table and sequential naming."
+}

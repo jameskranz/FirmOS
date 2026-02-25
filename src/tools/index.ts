@@ -21,6 +21,7 @@ import { ProvisionWorkerTool } from './provision-worker.js';
 import { ListWorkersTool } from './list-workers.js';
 import { TerminateWorkerTool } from './terminate-worker.js';
 import { UpdateDirectivesTool } from './update-directives.js';
+import { RunShellCommandTool } from './run-shell-command.js';
 import type { Tool } from '@google/generative-ai';
 
 export const allTools = [
@@ -47,7 +48,8 @@ export const allTools = [
     new ProvisionWorkerTool(),
     new ListWorkersTool(),
     new TerminateWorkerTool(),
-    new UpdateDirectivesTool()
+    new UpdateDirectivesTool(),
+    new RunShellCommandTool()
 ];
 
 export const firmOsTools: Tool = {
@@ -74,3 +76,4 @@ export * from './provision-worker.js';
 export * from './list-workers.js';
 export * from './terminate-worker.js';
 export * from './update-directives.js';
+export * from './run-shell-command.js';

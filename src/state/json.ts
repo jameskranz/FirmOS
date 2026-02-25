@@ -145,6 +145,11 @@ export class JsonStateManager extends BaseStateManager {
         }
     }
 
+    async listAllTickets(): Promise<Ticket[]> {
+        const tickets = await this.readTickets();
+        return Object.values(tickets);
+    }
+
     // Role Management (Stub/Legacy Sync handled by tools for JSON)
     async upsertRole(role: Omit<Role, 'updatedAt'>): Promise<void> {
         // Legacy tools already write to role-registry.json
@@ -165,5 +170,18 @@ export class JsonStateManager extends BaseStateManager {
 
     async listCeoInteractions(): Promise<CeoInteraction[]> {
         return [];
+    }
+
+    // Directives
+    async upsertDirective(roleName: string, content: string): Promise<void> {
+        // Not implemented for JSON state
+    }
+
+    async getDirective(roleName: string): Promise<string | null> {
+        return null;
+    }
+
+    async purgeProjectData(): Promise<void> {
+        // Not implemented for JSON state
     }
 }

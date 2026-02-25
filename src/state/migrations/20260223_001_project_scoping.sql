@@ -1,4 +1,5 @@
 -- Migration: 002 Project Scoping and CEO Memory
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 -- 1. Workflows: Add project_id and update Primary Key
 ALTER TABLE workflows ADD COLUMN IF NOT EXISTS project_id TEXT DEFAULT 'default';

@@ -8,6 +8,7 @@
   },
   "scripts": {
     "build": "tsc",
+    "postbuild": "copyfiles -u 1 \"src/**/*.sql\" dist/ && copyfiles \"runner-entrypoint.sh\" dist/",
     "start": "node dist/src/daemon.js",
     "dev": "tsx src/daemon.ts",
     "publish": "tsx scripts/publish.ts",
@@ -15,7 +16,7 @@
     "reset:roles": "tsx scripts/reset-roles.ts",
     "reset:work": "tsx scripts/reset-work.ts",
     "reset:tickets": "tsx scripts/reset-tickets.ts",
-    "reset:all": "npm run reset:roles && npm run reset:work && npm run reset:tickets && npm run purge:queue",
+    "reset:all": "firmos reset --hard",
     "purge:queue": "tsx scripts/purge-queue.ts",
     "test": "node tests/config.test.js && node tests/styleguide.test.js && node tests/scripts/package-scripts.test.js && tsx tests/daemon.test.ts && tsx tests/tools/index.test.ts",
     "test:stories": "tsx tests/stories/cli-onboarding.story.ts && tsx tests/stories/project-isolation.story.ts && tsx tests/stories/resilient-infra.story.ts && tsx tests/stories/ceo-handoff.story.ts"
@@ -49,6 +50,7 @@
     "@types/dockerode": "^4.0.1",
     "@types/node": "^25.3.0",
     "@types/pg": "^8.16.0",
+    "copyfiles": "^2.4.1",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3"
   }

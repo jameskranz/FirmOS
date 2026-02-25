@@ -39,3 +39,18 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 - [x] **Track: CEO Memory & DB Scoping**
 *Link: [./tracks/ceo_memory_db_scoping_20260223/](./tracks/ceo_memory_db_scoping_20260223/)*
+
+---
+
+- [x] **Track: Database Migration Tracking**
+*Link: [./tracks/database_migrations_20260223/](./tracks/database_migrations_20260223/)*
+
+---
+
+- [x] **Track: PRD Seeding & Bootstrap**
+*Link: [./tracks/prd_seeding_20260223/](./tracks/prd_seeding_20260223/)*
+
+---
+
+- [ ] **Track: Developer Shell Tools**
+*Link: [./tracks/developer_tools_20260223/](./tracks/developer_tools_20260223/)*

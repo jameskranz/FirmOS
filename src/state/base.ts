@@ -40,6 +40,7 @@ export interface Role {
     slaContent: string;
     modelTier: string;
     managerRole?: string;
+    allowedTools?: string[];
     updatedAt: string;
 }
 
@@ -68,6 +69,7 @@ export abstract class BaseStateManager {
     abstract updateTicket(ticketId: string, updates: Partial<Omit<Ticket, 'id' | 'created'>>): Promise<void>;
     abstract getTicket(ticketId: string): Promise<Ticket | null>;
     abstract listTickets(parentId: string | null): Promise<Ticket[]>;
+    abstract listAllTickets(): Promise<Ticket[]>;
 
     // Role Management
     abstract upsertRole(role: Omit<Role, 'updatedAt'>): Promise<void>;
@@ -77,4 +79,11 @@ export abstract class BaseStateManager {
     // CEO Memory
     abstract logCeoInteraction(prompt: string, response: string): Promise<void>;
     abstract listCeoInteractions(): Promise<CeoInteraction[]>;
+
+    // Directives
+    abstract upsertDirective(roleName: string, content: string): Promise<void>;
+    abstract getDirective(roleName: string): Promise<string | null>;
+
+    // Cleanup
+    abstract purgeProjectData(): Promise<void>;
 }

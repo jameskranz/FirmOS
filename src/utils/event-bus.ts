@@ -13,7 +13,9 @@ export enum FirmOsEvent {
     RESUME = 'resume',
     PURGE = 'purge',
     STATUS_UPDATE = 'status_update',
-    SHUTDOWN = 'shutdown'
+    SHUTDOWN = 'shutdown',
+    RESET = 'reset',
+    BOOTSTRAP_SEED = 'bootstrap_seed'
 }
 
 export function emitLog(message: string) {

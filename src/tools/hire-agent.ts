@@ -35,6 +35,11 @@ export class HireAgentTool extends BaseTool {
                     managerRole: {
                         type: SchemaType.STRING,
                         description: "Optional: The hierarchical name of the role this new agent reports to. Defaults to your own role."
+                    },
+                    allowedTools: {
+                        type: SchemaType.ARRAY,
+                        items: { type: SchemaType.STRING },
+                        description: "Optional: A list of specific tools this agent is allowed to use. If omitted, they may be given a default set."
                     }
                 },
                 required: ["roleName", "description", "slaContent"]
@@ -42,8 +47,8 @@ export class HireAgentTool extends BaseTool {
         };
     }
 
-    async execute(args: { roleName: string, description: string, slaContent: string, model?: string, managerRole?: string }): Promise<string> {
-        const { roleName, description, slaContent, model, managerRole } = args;
+    async execute(args: { roleName: string, description: string, slaContent: string, model?: string, managerRole?: string, allowedTools?: string[] }): Promise<string> {
+        const { roleName, description, slaContent, model, managerRole, allowedTools } = args;
         const projectRoot = getProjectRoot();
         
         let assignedModel = model;
@@ -73,7 +78,8 @@ export class HireAgentTool extends BaseTool {
                 description,
                 slaContent,
                 modelTier: assignedModel,
-                managerRole: managerRole
+                managerRole: managerRole,
+                allowedTools: allowedTools
             });
             await state.disconnect();
             console.log(`🗄️  Persisted role [${roleName}] to Database (Project: ${projectId}, Manager: ${managerRole || 'N/A'}).`);
@@ -97,7 +103,9 @@ export class HireAgentTool extends BaseTool {
         registry[roleName] = {
             description: description,
             slaPath: relativePath,
-            modelTier: assignedModel
+            modelTier: assignedModel,
+            managerRole: managerRole,
+            allowedTools: allowedTools
         };
         await fs.writeFile(registryPath, JSON.stringify(registry, null, 2));
 

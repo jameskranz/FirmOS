@@ -220,24 +220,47 @@ async function processTask(role: string, prompt: string, modelOverride?: string,
             }
         }
         
-        const toolDoc = generateToolDocumentation(firmOsTools);
+        // Filter tools based on allowedTools
+        let filteredTools = allTools;
+        if (dbRole?.allowedTools && Array.isArray(dbRole.allowedTools)) {
+            filteredTools = allTools.filter(t => dbRole.allowedTools.includes(t.definition.name));
+        }
+
+        const toolDoc = generateToolDocumentation({ functionDeclarations: filteredTools.map(t => t.definition) } as any);
         let directiveContext = '';
+
+        // Help Bubbling Instruction
+        const helpInstruction = `\n\n# PLATFORM LIMITATIONS & ASSISTANCE
+If you find that your current toolset is insufficient to complete a task, you MUST NOT hallucinate tools or struggle indefinitely.
+Instead, use 'publish_message' to contact your manager (${dbRole?.managerRole || 'ceo'}) or use 'request_hire' to request a specialized agent who possesses the necessary capabilities.
+Always be explicit about what tool or capability you are missing.\n\n`;
 
         // Hierarchical Directive Injection
         if (dbRole?.managerRole) {
             const manager = dbRole.managerRole;
-            const filename = `${manager.replace('/', '-')}.md`;
-            const directivePath = path.join(WORKSPACE_ROOT, 'company', 'work', 'directives', filename);
-            try {
-                const directives = await fs.readFile(directivePath, 'utf8');
+            let directives = '';
+
+            // 1. Try DB first (Primary source of truth)
+            if (stateManager) {
+                directives = await stateManager.getDirective(manager) || '';
+            }
+
+            // 2. Fallback to file (Migration/Legacy support)
+            if (!directives) {
+                const filename = `${manager.replace('/', '-')}.md`;
+                const directivePath = path.join(WORKSPACE_ROOT, 'company', 'work', 'directives', filename);
+                try {
+                    directives = await fs.readFile(directivePath, 'utf8');
+                } catch (e) {}
+            }
+
+            if (directives) {
                 directiveContext = `\n\n# MANDATORY DIRECTIVES FROM YOUR MANAGER (${manager.toUpperCase()})\n${directives}\n\n`;
                 console.log(`📋 Injected directives from [${manager}]`);
-            } catch (e) {
-                // No directives yet, that's fine
             }
         }
 
-        const systemInstruction = toolDoc + directiveContext + systemPrompt;
+        const systemInstruction = toolDoc + helpInstruction + directiveContext + systemPrompt;
 
         console.log(`🧠 Thinking...`);
         
@@ -246,7 +269,7 @@ async function processTask(role: string, prompt: string, modelOverride?: string,
             model = genAI.getGenerativeModel({ 
                 model: modelName, 
                 systemInstruction: systemInstruction,
-                tools: [firmOsTools] 
+                tools: [{ functionDeclarations: filteredTools.map(t => t.definition) } as any] 
             });
         } catch (err: any) {
             console.log(`🔍 Model initialization error: ${err.message}`);
@@ -255,7 +278,7 @@ async function processTask(role: string, prompt: string, modelOverride?: string,
                 model = genAI.getGenerativeModel({ 
                     model: 'gemini-2.5-flash', 
                     systemInstruction: systemInstruction,
-                    tools: [firmOsTools] 
+                    tools: [{ functionDeclarations: filteredTools.map(t => t.definition) } as any] 
                 });
             } else {
                 throw err;
@@ -522,6 +545,24 @@ export async function initializeProjectContext() {
     await fs.writeFile(path.join(cwd, '.firmosrc'), `# FirmOS Project Configuration\ncreated_at: ${new Date().toISOString()}\nproject_id: ${projectId}\n`);
     console.log(`✅ Created .firmosrc (Project ID: ${projectId})`);
 
+    // Create initial directives directory
+    const directivesDir = path.join(cwd, 'company', 'work', 'directives');
+    if (!fsSync.existsSync(directivesDir)) {
+        await fs.mkdir(directivesDir, { recursive: true });
+        await fs.writeFile(path.join(directivesDir, 'ceo.md'), `# CEO Directives\n\nNo mandates recorded yet.`);
+    }
+
+    // --- PRD Seeding (Reference Artifact) ---
+    const seedPath = process.env.PRD_SEED_PATH || path.join(cwd, 'initial-prd.md');
+    if (fsSync.existsSync(seedPath)) {
+        const seedContent = fsSync.readFileSync(seedPath, 'utf8');
+        const workDir = path.join(cwd, 'company', 'work');
+        if (!fsSync.existsSync(workDir)) await fs.mkdir(workDir, { recursive: true });
+        
+        await fs.writeFile(path.join(workDir, 'seed-prd.md'), seedContent);
+        console.log(`🌱 Seed PRD saved to company/work/seed-prd.md`);
+    }
+
     rl.close();
     console.log("✨ Project initialized successfully!\n");
 }
@@ -680,6 +721,15 @@ export async function startDaemon(options: { tuiMode?: boolean } = {}) {
             }
 
             const payload = JSON.parse(msg.content.toString());
+
+            // --- System Message Handling ---
+            if (payload.role === 'system/shutdown') {
+                console.log('🛑 RECEIVED SYSTEM SHUTDOWN MESSAGE');
+                eventBus.emit(FirmOsEvent.SHUTDOWN);
+                if (msg) amqpChannel!.ack(msg);
+                return;
+            }
+
             await processTask(payload.role, payload.prompt, payload.model, msg, payload.gitInfo);
         });
 
@@ -703,7 +753,7 @@ export async function startDaemon(options: { tuiMode?: boolean } = {}) {
             await directiveUpdater.updateDirectives({ 
                 prompt: originalPayload.prompt, 
                 response: response 
-            });
+            }, 'ceo', stateManager);
 
             const payload = {
                 role: originalPayload.role,
@@ -727,7 +777,7 @@ export async function startDaemon(options: { tuiMode?: boolean } = {}) {
             await directiveUpdater.updateDirectives({ 
                 prompt: 'Initial Task Dispatch', 
                 response: prompt 
-            });
+            }, 'ceo', stateManager);
 
             const payload = {
                 role: 'intake/consultant',
@@ -763,6 +813,50 @@ export async function startDaemon(options: { tuiMode?: boolean } = {}) {
 
         eventBus.on(FirmOsEvent.SHUTDOWN, async () => {
             await shutdown();
+        });
+
+        eventBus.on('request_tickets', async () => {
+            if (stateManager) {
+                try {
+                    const all = await stateManager.listAllTickets();
+                    eventBus.emit('tickets_list', all);
+                } catch (e) {
+                    console.error('Failed to fetch tickets for TUI');
+                }
+            }
+        });
+
+        eventBus.on(FirmOsEvent.RESET, async () => {
+            console.log('🧹 RECEIVED RESET COMMAND...');
+            if (stateManager) {
+                await stateManager.purgeProjectData();
+            }
+            // Queues are already handled by PURGE event, 
+            // but we'll re-trigger it here for a full reset.
+            eventBus.emit(FirmOsEvent.PURGE);
+        });
+
+        eventBus.on(FirmOsEvent.BOOTSTRAP_SEED, async () => {
+            console.log('🌱 BOOTSTRAPPING PROJECT FROM SEED PRD...');
+            const seedPath = process.env.PRD_SEED_PATH || path.join(WORKSPACE_ROOT, 'initial-prd.md');
+            try {
+                if (fsSync.existsSync(seedPath)) {
+                    const seedContent = await fs.readFile(seedPath, 'utf8');
+                    
+                    const payload = {
+                        role: 'intake/consultant',
+                        prompt: `BOOTSTRAP REQUEST: I am providing an initial seed PRD to bootstrap this project. Please review the content below, initialize the necessary feature workbooks, and initiate the standard SDLC triage process.\n\nSEED CONTENT:\n${seedContent}`,
+                        timestamp: new Date().toISOString()
+                    };
+
+                    await amqpChannel!.sendToQueue(QUEUE_NAME, Buffer.from(JSON.stringify(payload)), { persistent: true });
+                    console.log(`✅ Successfully dispatched bootstrap task from ${seedPath}`);
+                } else {
+                    console.error(`❌ Seed file not found at: ${seedPath}`);
+                }
+            } catch (err: any) {
+                console.error(`❌ Bootstrap failed: ${err.message}`);
+            }
         });
 
     } catch (error) {
