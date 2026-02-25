@@ -4,6 +4,10 @@ import { BaseTool } from './base.js';
 import type { ToolDefinition } from './base.js';
 import { getProjectRoot } from '../utils/path-resolver.js';
 
+/**
+ * Tool for executing arbitrary shell commands within the project root.
+ * Used by developer roles to run tests, builds, and manage environment.
+ */
 export class RunShellCommandTool extends BaseTool {
     get definition(): ToolDefinition {
         return {
