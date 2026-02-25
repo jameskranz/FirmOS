@@ -51,6 +51,3 @@ This file tracks all major tracks for the project. Each track has its own detail
 *Link: [./tracks/prd_seeding_20260223/](./tracks/prd_seeding_20260223/)*
 
 ---
-
-- [ ] **Track: Developer Shell Tools**
-*Link: [./tracks/developer_tools_20260223/](./tracks/developer_tools_20260223/)*
