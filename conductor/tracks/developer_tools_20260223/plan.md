@@ -11,5 +11,8 @@
     - [ ] Advise the director to instruct developers to **always verify code via tests** before marking a ticket as 'Done'.
 
 ## Phase 3: Validation
-- [ ] Task: Verify with a story test or manual TUI command.
-    - [ ] Run `npm --version` or `ls -la` via the tool.
+- [x] Task: Verify with a story test or manual TUI command.
+    - [x] Run `npm --version` or `ls -la` via the tool.
+
+## Phase 4: Review Fixes
+- [x] Task: Apply review suggestions 4a59bc4
