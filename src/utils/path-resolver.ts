@@ -24,3 +24,12 @@ export function validateProjectRoot() {
 export function getProjectRoot() {
     return PROJECT_ROOT;
 }
+
+/**
+ * Returns the directory for project artifacts (workbooks, PRDs).
+ * Defaults to 'artifacts' but can be overridden by FIRMOS_ARTIFACTS_DIR env var.
+ */
+export function getArtifactsDir() {
+    const defaultDir = path.join(getProjectRoot(), 'artifacts');
+    return process.env.FIRMOS_ARTIFACTS_DIR || defaultDir;
+}

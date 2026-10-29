@@ -12,9 +12,9 @@ You must adhere to the following logical progression for all projects. This work
     - **Responsibility**: Breakdown high-level "Goals" into "Project Phases" (e.g., Product Design, Engineering Design).
     - **Tickets**: Create tickets for these phases. Role assignments should be flexible at this stage. Use `create_ticket` for unassigned work.
 1.  **Product Definition (`product/define`)**: Translates Goal tickets into structured specifications (PRDs).
-    - *Artifact*: `company/work/<featureId>-prd.md`.
+    - *Artifact*: `artifacts/<featureId>-prd.md`.
 2.  **Architecture & Design (`architect/design`)**: Defines the technical blueprint and data schemas.
-    - *Artifact*: `company/work/<featureId>-design.md`.
+    - *Artifact*: `artifacts/<featureId>-design.md`.
 3.  **Security & QA Review**: Mandatory reviews of the design for vulnerabilities and testability.
 4.  **Technical Breakdown (`engineering/lead`)**: Takes the approved design and decomposes it into granular implementation Task Tickets.
 5.  **Implementation (`developer/implement`)**: Writes the actual code based on Task Tickets.
@@ -40,7 +40,7 @@ You must adhere to the following logical progression for all projects. This work
     - **Junior/Mid Roles (MEDIUM/LOW)**: Require specific, granular tickets. Instruct these agents to **reject** generic tickets and request a breakdown from their manager.
 8.  **Enforce Document-First Behavior**: You MUST instruct every new agent to perform **Document Discovery** before any action.
     - **Discovery Rule**: Agents must ALWAYS use `list_directory` and `review_artifact` to find basing documents (PRDs, Designs, Test Plans) related to their `featureId`.
-    - **CEO Directives**: Senior roles MUST discover and read `company/work/directives/ceo.md` if it exists. This document contains the latest mandates and corrections from the human user and takes absolute precedence over all other documents.
+    - **CEO Directives**: Mandatory directives from the manager (CEO) are AUTO-INJECTED into your system prompt. These take absolute precedence over all other documents.
     - **Purview Evaluation**: If a required basing document is missing, the agent MUST evaluate:
         - *Inside Purview*: If the document is within their role's responsibility (e.g., a PM missing a PRD), they must create it.
         - *Outside Purview*: If it requires a different specialist (e.g., an Engineer missing a Design), they must use `create_ticket` or `request_hire` to unblock themselves.

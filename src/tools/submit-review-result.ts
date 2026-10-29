@@ -1,10 +1,11 @@
+import fs from 'node:fs/promises';
 import { SchemaType } from '@google/generative-ai';
 import { BaseTool } from './base.js';
 import type { ToolDefinition } from './base.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { JsonStateManager } from '../state/json.js';
-import { getProjectRoot } from '../utils/path-resolver.js';
+import { getProjectRoot, getArtifactsDir } from '../utils/path-resolver.js';
 import { MessageBroker } from '../utils/message-broker.js';
 
 export class SubmitReviewResultTool extends BaseTool {
@@ -19,6 +20,10 @@ export class SubmitReviewResultTool extends BaseTool {
                         type: SchemaType.STRING,
                         description: "The unique ID of the feature."
                     },
+                    artifactType: {
+                        type: SchemaType.STRING,
+                        description: "The type of artifact reviewed. Options: 'workbook', 'prd', 'design', 'test-plan'."
+                    },
                     approved: {
                         type: SchemaType.BOOLEAN,
                         description: "Whether the artifact is approved (true) or requires changes (false)."
@@ -32,21 +37,39 @@ export class SubmitReviewResultTool extends BaseTool {
                         description: "Your hierarchical role name (e.g., 'architect/design', 'architect/security')."
                     }
                 },
-                required: ["featureId", "approved", "note", "role"]
+                required: ["featureId", "artifactType", "approved", "note", "role"]
             }
         };
     }
 
-    async execute(args: { featureId: string, approved: boolean, note: string, role: string }): Promise<string> {
-        const { featureId, approved, note, role } = args;
-        const stateFile = path.join(getProjectRoot(), 'company', 'state', 'workflows.json');
-        const stateManager = new JsonStateManager(stateFile);
+    async execute(args: { featureId: string, artifactType: string, approved: boolean, note: string, role: string }): Promise<string> {
+        const { featureId, artifactType, approved, note, role } = args;
+        const stateManager = (global as any).firmOsStateManager;
+        
         const broker = new MessageBroker();
 
-        const workflow = await stateManager.getWorkflow(featureId);
+        const workflow = await stateManager.workflows.get(featureId);
         if (!workflow) {
             throw new Error(`Workflow not found for feature: ${featureId}`);
         }
+
+        // Capture content snapshot
+        let contentSnapshot = "CONTENT_NOT_FOUND";
+        try {
+            const filename = artifactType === 'workbook' ? `${featureId}.md` : `${featureId}-${artifactType}.md`;
+            const filePath = path.join(getArtifactsDir(), filename);
+            contentSnapshot = await fs.readFile(filePath, 'utf8');
+        } catch (e) {}
+
+        // Record in DB
+        await stateManager.reviews.record(
+            featureId,
+            artifactType,
+            contentSnapshot,
+            role,
+            approved ? 'approved' : 'revisions_needed',
+            note
+        );
 
         const approvals = workflow.approvals || {};
         approvals[role] = {
@@ -58,7 +81,7 @@ export class SubmitReviewResultTool extends BaseTool {
         const nextAgent = approved ? 'system' : 'product/define';
         const status = approved ? workflow.status : 'revising';
 
-        await stateManager.updateWorkflow(featureId, {
+        await stateManager.workflows.update(featureId, {
             approvals,
             status
         }, {

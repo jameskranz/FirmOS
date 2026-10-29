@@ -7,7 +7,8 @@ import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
 import crypto from 'node:crypto';
 import readline from 'node:readline/promises';
-import { startDaemon, initializeProjectContext } from '../daemon.js';
+import { spawn } from 'node:child_process';
+import { initializeProjectContext } from '../daemon.js';
 import { getProjectRoot, validateProjectRoot } from '../utils/path-resolver.js';
 import { startTui } from './tui/screen.js';
 
@@ -85,38 +86,24 @@ program
           screen.render();
       } else {
           panels.log.log('🚀 Starting new Orchestrator daemon...');
-          // 3. Start Daemon in background (it will emit events to the TUI)
-          startDaemon({ tuiMode: true }).then(async () => {
-              // --- Auto-Bootstrap Check ---
-              const seedPath = process.env.PRD_SEED_PATH || path.join(root, 'initial-prd.md');
-              if (fs.existsSync(seedPath)) {
-                  const { PostgresStateManager } = await import('../state/postgres.js');
-                  const { JsonStateManager } = await import('../state/json.js');
-                  
-                  // Quick check if project is empty
-                  let state;
-                  if (process.env.DATABASE_URL) {
-                      state = new PostgresStateManager(projectId, process.env.DATABASE_URL);
-                  } else {
-                      state = new JsonStateManager(path.join(root, 'company', 'state', 'workflows.json'), projectId);
-                  }
-                  
-                  const tickets = await state.listAllTickets();
-                  if (tickets.length === 0) {
-                      panels.log.log('🌱 Project is empty. Auto-bootstrapping from seed PRD...');
-                      const { eventBus, FirmOsEvent } = await import('../utils/event-bus.js');
-                      eventBus.emit(FirmOsEvent.BOOTSTRAP_SEED);
-                  }
-                  if (process.env.DATABASE_URL) await (state as any).disconnect();
-              }
-          }).catch(err => {
-              let errorMsg = `❌ Daemon Error: ${err.message}`;
-              if (err.message.includes('ECONNREFUSED') || err.code === 'ECONNREFUSED') {
-                  errorMsg += '\n\n💡 TIP: Is RabbitMQ running? Try:\n   docker-compose up -d rabbitmq';
-              }
-              panels.log.log(errorMsg);
-              screen.render();
+          
+          // Spawn daemon as detached background process
+          const daemonPath = path.join(__dirname, '..', 'daemon.js');
+          const daemon = spawn('node', [daemonPath], {
+              detached: true,
+              stdio: 'ignore',
+              env: { ...process.env, PROJECT_ID: projectId }
           });
+          daemon.unref();
+
+          panels.log.log(`✅ Daemon spawned (PID: ${daemon.pid})`);
+          screen.render();
+      }
+
+      // --- Common Initialization (Seeding Check) ---
+      const seedPath = process.env.PRD_SEED_PATH || path.join(root, 'initial-prd.md');
+      if (fs.existsSync(seedPath)) {
+          // Daemon handles seeding on startup via seeder.ts
       }
     } catch (err: any) {
       console.error(`❌ Failed to initialize: ${err.message}`);
@@ -191,6 +178,7 @@ program
       await channel.assertQueue(queue, { durable: true });
       const payload = {
         role: options.role,
+        fromRole: 'ceo',
         prompt: prompt,
         timestamp: new Date().toISOString()
       };

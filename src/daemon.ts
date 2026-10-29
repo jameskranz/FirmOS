@@ -12,13 +12,15 @@ import dotenv from 'dotenv';
 import { firmOsTools, allTools } from './tools/index.js';
 import { JsonStateManager } from './state/json.js';
 import { PostgresStateManager } from './state/postgres.js';
+import { seedDefaultData } from './state/seeder.js';
 import { HandoffManager } from './utils/handoff-manager.js';
 import { ModelResolver } from './utils/model-resolver.js';
 import { LoopMonitor } from './utils/loop-monitor.js';
 import { GitClient } from './utils/git-client.js';
-import { getProjectRoot, validateProjectRoot } from './utils/path-resolver.js';
-import { eventBus, FirmOsEvent } from './utils/event-bus.js';
+import { getProjectRoot, validateProjectRoot, getArtifactsDir } from './utils/path-resolver.js';
+import { eventBus, FirmOsEvent, bridgeToBroker } from './utils/event-bus.js';
 import { DirectiveUpdater } from './utils/directive-updater.js';
+import { MessageBroker } from './utils/message-broker.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -123,9 +125,17 @@ async function withRetry<T>(fn: () => Promise<T>, maxAttempts = 3): Promise<T> {
     throw new Error('Max retry attempts reached');
 }
 
-async function processTask(role: string, prompt: string, modelOverride?: string, originalMsg?: amqp.ConsumeMessage, gitInfo?: { repositoryUrl: string, branchName?: string }) {
+async function processTask(role: string, prompt: string, modelOverride?: string, originalMsg?: amqp.ConsumeMessage, gitInfo?: { repositoryUrl: string, branchName?: string }, fromRole?: string) {
+    if (isProcessing) {
+        console.log(`⏳ Busy processing another task. Re-queueing [${role}]...`);
+        if (originalMsg) {
+            // Delay slightly before nacking to avoid a tight spin loop if only one worker
+            setTimeout(() => amqpChannel?.nack(originalMsg, false, true), 1000);
+        }
+        return;
+    }
     isProcessing = true;
-    const payload = { role, prompt, model: modelOverride, gitInfo };
+    const payload = { role, fromRole, prompt, model: modelOverride, gitInfo };
 
     try {
         // --- 1. Workspace Sync (Git) ---
@@ -177,47 +187,20 @@ async function processTask(role: string, prompt: string, modelOverride?: string,
         
         let systemPrompt = '';
         
-        const dbRole = await stateManager.getRole(role);
+        const dbRole = await stateManager.roles.get(role);
         if (dbRole) {
             systemPrompt = dbRole.slaContent;
             console.log(`📖 Loaded SLA for [${role}] from Database (${systemPrompt.length} chars)`);
         } else {
-            const findSLA = async (root: string) => {
-                let rolePath = path.join(root, 'company', 'roles', `${role}.md`);
-                if (role.includes('/')) {
-                    const familyTaskPath = path.join(root, 'company', 'roles', `${role}.md`);
-                    try {
-                        await fs.access(familyTaskPath);
-                        return familyTaskPath;
-                    } catch {
-                        const familyBase = path.join(root, 'company', 'roles', `${role.split('/')[0]}.md`);
-                        try {
-                            await fs.access(familyBase);
-                            return familyBase;
-                        } catch {}
-                    }
-                }
-                try { await fs.access(rolePath); return rolePath; } catch { return null; }
-            };
-
-            const workspacePath = await findSLA(WORKSPACE_ROOT);
-            const enginePath = await findSLA(ENGINE_ROOT);
-            const finalPath = workspacePath || enginePath;
-
-            if (finalPath) {
-                systemPrompt = await fs.readFile(finalPath, 'utf8');
-                console.log(`📖 Loaded SLA for [${role}] from File [${finalPath === workspacePath ? 'Workspace' : 'Engine'}] (${systemPrompt.length} chars)`);
-            } else {
-                console.log(`⚠️  Role [${role}] not found in DB, Workspace, or Engine. Routing to [hr/recruiter] for dynamic hiring.`);
-                if (role !== 'hr/recruiter') {
-                    const retryPrompt = `DYNAMIC HIRE REQUIRED: Role [${role}] is missing. Please evaluate the project context and hire this role.\n\nOriginal Task:\n${prompt}`;
-                    const payload = JSON.stringify({ role: 'hr/recruiter', prompt: retryPrompt, gitInfo });
-                    amqpChannel?.sendToQueue(QUEUE_NAME, Buffer.from(payload), { persistent: true });
-                }
-                if (originalMsg) amqpChannel?.ack(originalMsg);
-                isProcessing = false;
-                return;
+            console.log(`⚠️  Role [${role}] not found in DB. Routing to [hr/recruiter] for dynamic hiring.`);
+            if (role !== 'hr/recruiter') {
+                const retryPrompt = `DYNAMIC HIRE REQUIRED: Role [${role}] is missing. Please evaluate the project context and hire this role.\n\nOriginal Task:\n${prompt}`;
+                const payload = JSON.stringify({ role: 'hr/recruiter', fromRole: role, prompt: retryPrompt, gitInfo });
+                amqpChannel?.sendToQueue(QUEUE_NAME, Buffer.from(payload), { persistent: true });
             }
+            if (originalMsg) amqpChannel?.ack(originalMsg);
+            isProcessing = false;
+            return;
         }
         
         // Filter tools based on allowedTools
@@ -238,21 +221,7 @@ Always be explicit about what tool or capability you are missing.\n\n`;
         // Hierarchical Directive Injection
         if (dbRole?.managerRole) {
             const manager = dbRole.managerRole;
-            let directives = '';
-
-            // 1. Try DB first (Primary source of truth)
-            if (stateManager) {
-                directives = await stateManager.getDirective(manager) || '';
-            }
-
-            // 2. Fallback to file (Migration/Legacy support)
-            if (!directives) {
-                const filename = `${manager.replace('/', '-')}.md`;
-                const directivePath = path.join(WORKSPACE_ROOT, 'company', 'work', 'directives', filename);
-                try {
-                    directives = await fs.readFile(directivePath, 'utf8');
-                } catch (e) {}
-            }
+            const directives = await stateManager.directives.get(manager);
 
             if (directives) {
                 directiveContext = `\n\n# MANDATORY DIRECTIVES FROM YOUR MANAGER (${manager.toUpperCase()})\n${directives}\n\n`;
@@ -288,7 +257,7 @@ Always be explicit about what tool or capability you are missing.\n\n`;
         const chat = model.startChat();
         let currentPrompt: string | Array<any> = prompt;
         let loopCount = 0;
-        let maxLoops = 5;
+        let maxLoops = 10;
         const loopMonitorModelName = await modelResolver.resolve('system/loop-monitor');
         const loopMonitor = new LoopMonitor(genAI, loopMonitorModelName);
 
@@ -346,6 +315,7 @@ Always be explicit about what tool or capability you are missing.\n\n`;
             }
 
             const toolResponses: any[] = [];
+            let handoffOccurred = false;
 
             for (const call of functionCalls) {
                 const tool = allTools.find(t => t.definition.name === call.name);
@@ -361,12 +331,12 @@ Always be explicit about what tool or capability you are missing.\n\n`;
 
                         if (call.name === 'initialize_feature_work') {
                             const slug = (call.args as any).featureName.toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').trim();
-                            await stateManager.initializeWorkflow({
+                            await stateManager.workflows.initialize({
                                 featureId: slug,
                                 featureName: (call.args as any).featureName,
                                 currentAgent: role,
                                 status: 'drafting',
-                                workbookPath: `company/work/${slug}.md`,
+                                workbookPath: path.join(getArtifactsDir(), `${slug}.md`),
                                 repositoryUrl: (call.args as any).repositoryUrl,
                                 approvals: {}
                             });
@@ -374,13 +344,17 @@ Always be explicit about what tool or capability you are missing.\n\n`;
                         }
 
                         const handoffConfig = handoffManager.getHandoffConfig(call.name, call.args);
+                        if (handoffConfig || call.name === 'publish_message' || call.name === 'submit_review_result' || call.name === 'submit_feedback') {
+                            handoffOccurred = true;
+                        }
+
                         if (handoffConfig) {
                             const { featureId } = call.args as any;
                             const nextPrompt = handoffConfig.promptTemplate(call.args);
                             
                             console.log(`📡 [Handoff] Routing feature '${featureId}' to ${handoffConfig.targetRole}...`);
                             
-                            await stateManager.updateWorkflow(featureId, {
+                            await stateManager.workflows.update(featureId, {
                                 currentAgent: handoffConfig.targetRole,
                                 status: handoffConfig.nextStatus
                             }, {
@@ -392,7 +366,7 @@ Always be explicit about what tool or capability you are missing.\n\n`;
                             });
 
                             if (handoffConfig.targetRole !== 'human') {
-                                const payload = JSON.stringify({ role: handoffConfig.targetRole, prompt: nextPrompt, gitInfo });
+                                const payload = JSON.stringify({ role: handoffConfig.targetRole, fromRole: role, prompt: nextPrompt, gitInfo });
                                 amqpChannel!.sendToQueue(QUEUE_NAME, Buffer.from(payload), { persistent: true });
                                 console.log(`🚀 [Handoff] Published task for ${handoffConfig.targetRole}.`);
                             } else {
@@ -413,6 +387,10 @@ Always be explicit about what tool or capability you are missing.\n\n`;
                 }
             }
             currentPrompt = toolResponses;
+            if (handoffOccurred) {
+                console.log(`🏁 Handoff completed. Terminating micro-loop.`);
+                break;
+            }
         }
 
         if (loopCount >= maxLoops) {
@@ -507,6 +485,11 @@ function generateToolDocumentation(tools: Tool): string {
 }
 
 export async function initializeProjectContext() {
+    // If we are already running in a context where stdin is managed (like TUI), 
+    // we should NOT use readline here.
+    if (process.stdin.isTTY && (process as any)._blessed) {
+        return;
+    }
     const rl = readline.createInterface({
         input: process.stdin,
         output: process.stdout
@@ -545,22 +528,16 @@ export async function initializeProjectContext() {
     await fs.writeFile(path.join(cwd, '.firmosrc'), `# FirmOS Project Configuration\ncreated_at: ${new Date().toISOString()}\nproject_id: ${projectId}\n`);
     console.log(`✅ Created .firmosrc (Project ID: ${projectId})`);
 
-    // Create initial directives directory
-    const directivesDir = path.join(cwd, 'company', 'work', 'directives');
-    if (!fsSync.existsSync(directivesDir)) {
-        await fs.mkdir(directivesDir, { recursive: true });
-        await fs.writeFile(path.join(directivesDir, 'ceo.md'), `# CEO Directives\n\nNo mandates recorded yet.`);
-    }
-
     // --- PRD Seeding (Reference Artifact) ---
     const seedPath = process.env.PRD_SEED_PATH || path.join(cwd, 'initial-prd.md');
     if (fsSync.existsSync(seedPath)) {
         const seedContent = fsSync.readFileSync(seedPath, 'utf8');
-        const workDir = path.join(cwd, 'company', 'work');
+        const workDir = getArtifactsDir();
         if (!fsSync.existsSync(workDir)) await fs.mkdir(workDir, { recursive: true });
         
-        await fs.writeFile(path.join(workDir, 'seed-prd.md'), seedContent);
-        console.log(`🌱 Seed PRD saved to company/work/seed-prd.md`);
+        const prdPath = path.join(workDir, 'seed-prd.md');
+        await fs.writeFile(prdPath, seedContent);
+        console.log(`🌱 Seed PRD saved to ${prdPath}`);
     }
 
     rl.close();
@@ -589,7 +566,6 @@ export async function startDaemon(options: { tuiMode?: boolean } = {}) {
 
     genAI = new GoogleGenerativeAI(apiKey.trim().replace(/\r/g, ''));
     handoffManager = new HandoffManager();
-    modelResolver = new ModelResolver(path.join(WORKSPACE_ROOT, 'company', 'role-models.json'));
 
     // --- Dynamic Worker Initialization ---
     if (process.env.AUTOCLONE_REPO) {
@@ -667,10 +643,18 @@ export async function startDaemon(options: { tuiMode?: boolean } = {}) {
         const rabbitUrl = process.env.RABBITMQ_URL || 'amqp://localhost';
         amqpConnection = await amqp.connect(rabbitUrl) as any;
         amqpChannel = await (amqpConnection as any).createChannel();
+
+        // Setup cross-process event bridging
+        const broker = new MessageBroker();
+        await broker.connect();
+        bridgeToBroker(broker);
         
         await amqpChannel!.assertQueue(QUEUE_NAME, { durable: true });
         await amqpChannel!.assertQueue(EXTERNAL_QUEUE, { durable: true });
         await amqpChannel!.assertQueue(ERROR_QUEUE, { durable: true });
+        
+        // Ensure we only handle one message at a time globally (even across queues)
+        await amqpChannel!.prefetch(1);
         
         const toolNames = (firmOsTools as any).functionDeclarations?.map((f: any) => f.name).join(', ') || 'none';
         if (!options.tuiMode) {
@@ -683,13 +667,21 @@ export async function startDaemon(options: { tuiMode?: boolean } = {}) {
         // --- State Management Selection ---
         if (process.env.DATABASE_URL) {
             stateManager = new PostgresStateManager(PROJECT_ID, process.env.DATABASE_URL);
-            await stateManager.initializeSchema();
+            await (stateManager as PostgresStateManager).initializeSchema();
             if (!options.tuiMode) console.log(`🗄️  Using PostgreSQL for state management (Project: ${PROJECT_ID}).`);
         } else {
-            const STATE_FILE = path.join(WORKSPACE_ROOT, 'company', 'state', 'workflows.json');
+            const STATE_FILE = path.join(WORKSPACE_ROOT, '.firmos-state.json');
             stateManager = new JsonStateManager(STATE_FILE, PROJECT_ID);
             if (!options.tuiMode) console.log(`📄 Using JSON files for state management (Project: ${PROJECT_ID}).`);
         }
+
+        // Expose stateManager globally for tools to use
+        (global as any).firmOsStateManager = stateManager;
+
+        // Auto-seed default roles and tiers
+        await seedDefaultData(stateManager);
+
+        modelResolver = new ModelResolver(stateManager);
 
         amqpChannel!.consume(QUEUE_NAME, async (msg) => {
             if (!msg) return;
@@ -730,7 +722,7 @@ export async function startDaemon(options: { tuiMode?: boolean } = {}) {
                 return;
             }
 
-            await processTask(payload.role, payload.prompt, payload.model, msg, payload.gitInfo);
+            await processTask(payload.role, payload.prompt, payload.model, msg, payload.gitInfo, payload.fromRole);
         });
 
         amqpChannel!.consume(EXTERNAL_QUEUE, async (msg) => {
@@ -741,11 +733,11 @@ export async function startDaemon(options: { tuiMode?: boolean } = {}) {
 
         // Listen for CEO responses from TUI
         eventBus.on('ceo_response', async ({ originalPayload, response }) => {
-            console.log(`\n👑 CEO Decision received for [${originalPayload.role}]`);
+            console.log(`\n👑 CEO Decision received for [${originalPayload.fromRole || 'unknown'}]`);
             
             // 1. Log to DB
             if (stateManager) {
-                await stateManager.logCeoInteraction(originalPayload.prompt, response);
+                await stateManager.ceoMemory.log(originalPayload.prompt, response);
             }
 
             // 2. Update summary artifact
@@ -755,8 +747,10 @@ export async function startDaemon(options: { tuiMode?: boolean } = {}) {
                 response: response 
             }, 'ceo', stateManager);
 
+            const targetRole = originalPayload.fromRole || 'hr/director';
             const payload = {
-                role: originalPayload.role,
+                role: targetRole,
+                fromRole: 'ceo',
                 prompt: `CEO FEEDBACK:\n${response}\n\nORIGINAL PROMPT:\n${originalPayload.prompt}`,
                 gitInfo: originalPayload.gitInfo
             };
@@ -769,7 +763,7 @@ export async function startDaemon(options: { tuiMode?: boolean } = {}) {
 
             // 1. Log to DB
             if (stateManager) {
-                await stateManager.logCeoInteraction('Initial Task Dispatch', prompt);
+                await stateManager.ceoMemory.log('Initial Task Dispatch', prompt);
             }
 
             // 2. Update summary artifact
@@ -781,6 +775,7 @@ export async function startDaemon(options: { tuiMode?: boolean } = {}) {
 
             const payload = {
                 role: 'intake/consultant',
+                fromRole: 'ceo',
                 prompt: prompt,
                 timestamp: new Date().toISOString()
             };
@@ -818,7 +813,7 @@ export async function startDaemon(options: { tuiMode?: boolean } = {}) {
         eventBus.on('request_tickets', async () => {
             if (stateManager) {
                 try {
-                    const all = await stateManager.listAllTickets();
+                    const all = await stateManager.tickets.listAll();
                     eventBus.emit('tickets_list', all);
                 } catch (e) {
                     console.error('Failed to fetch tickets for TUI');
@@ -845,6 +840,7 @@ export async function startDaemon(options: { tuiMode?: boolean } = {}) {
                     
                     const payload = {
                         role: 'intake/consultant',
+                        fromRole: 'ceo',
                         prompt: `BOOTSTRAP REQUEST: I am providing an initial seed PRD to bootstrap this project. Please review the content below, initialize the necessary feature workbooks, and initiate the standard SDLC triage process.\n\nSEED CONTENT:\n${seedContent}`,
                         timestamp: new Date().toISOString()
                     };

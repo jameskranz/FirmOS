@@ -21,32 +21,14 @@ export class ListRolesTool extends BaseTool {
     }
 
     async execute(_args: {}): Promise<string> {
+        console.log(`📋 Executed Tool: list_roles`);
+        const stateManager = (global as any).firmOsStateManager;
         let roles: any[] = [];
 
-        // 1. Try Database First (For Swarm consistency)
-        if (process.env.DATABASE_URL) {
-            try {
-                const stateManager = new PostgresStateManager(process.env.DATABASE_URL);
-                roles = await stateManager.listRoles();
-                await stateManager.disconnect();
-            } catch (e) {
-                console.error(`⚠️ Database role fetch failed: ${e}`);
-            }
-        }
-
-        // 2. Fallback to Workspace JSON if DB is empty or missing
-        if (roles.length === 0) {
-            const projectRoot = getProjectRoot();
-            const registryPath = path.join(projectRoot, 'company', 'role-registry.json');
-            try {
-                const content = await fs.readFile(registryPath, 'utf8');
-                const registry = JSON.parse(content);
-                roles = Object.entries(registry).map(([name, details]: [string, any]) => ({
-                    roleName: name,
-                    description: details.description,
-                    modelTier: details.modelTier
-                }));
-            } catch (e) {}
+        try {
+            roles = await stateManager.roles.list();
+        } catch (e) {
+            console.error(`⚠️ Database role fetch failed: ${e}`);
         }
 
         if (roles.length === 0) {

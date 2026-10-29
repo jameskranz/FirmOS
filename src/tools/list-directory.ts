@@ -16,7 +16,7 @@ export class ListDirectoryTool extends BaseTool {
                 properties: {
                     relativePath: {
                         type: SchemaType.STRING,
-                        description: "The relative path to the directory, e.g., 'src' or 'company/roles'."
+                        description: "The relative path to the directory, e.g., 'src' or 'artifacts'."
                     }
                 },
                 required: ["relativePath"]

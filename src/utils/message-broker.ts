@@ -5,6 +5,7 @@ import { getProjectRoot } from './path-resolver.js';
 
 export interface MessagePayload {
     role: string;
+    fromRole?: string;
     prompt: string;
     model?: string;
     gitInfo?: {
@@ -48,6 +49,10 @@ export class MessageBroker {
         return `${baseName}_${this.projectId}`;
     }
 
+    public getBroadcastExchange(): string {
+        return `tui_events_${this.projectId}`;
+    }
+
     public getProjectId(): string {
         return this.projectId;
     }
@@ -58,6 +63,8 @@ export class MessageBroker {
             this.connection = await amqp.connect(this.rabbitUrl) as any;
             if (this.connection) {
                 this.channel = await (this.connection as any).createChannel();
+                // Ensure broadcast exchange exists
+                await this.channel!.assertExchange(this.getBroadcastExchange(), 'fanout', { durable: false });
             }
         } catch (err: any) {
             throw new Error(`MessageBroker Connection Failed: ${err.message}`);
@@ -76,6 +83,26 @@ export class MessageBroker {
         };
 
         this.channel!.sendToQueue(scopedQueue, Buffer.from(JSON.stringify(finalPayload)), { persistent: true });
+    }
+
+    async broadcast(event: string, payload: any) {
+        if (!this.channel) await this.connect();
+        const msg = JSON.stringify({ event, payload, timestamp: new Date().toISOString() });
+        this.channel!.publish(this.getBroadcastExchange(), '', Buffer.from(msg));
+    }
+
+    async subscribeToBroadcast(onEvent: (event: string, payload: any) => void) {
+        if (!this.channel) await this.connect();
+        const exchange = this.getBroadcastExchange();
+        const q = await this.channel!.assertQueue('', { exclusive: true });
+        await this.channel!.bindQueue(q.queue, exchange, '');
+        
+        this.channel!.consume(q.queue, (msg) => {
+            if (msg) {
+                const data = JSON.parse(msg.content.toString());
+                onEvent(data.event, data.details || data.payload);
+            }
+        }, { noAck: true });
     }
 
     async consume(queueName: string, onMessage: (msg: amqp.ConsumeMessage | null) => void) {

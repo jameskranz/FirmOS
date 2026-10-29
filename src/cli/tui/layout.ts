@@ -77,7 +77,7 @@ export function createLayout(screen: blessed.Widgets.Screen) {
     const inputBar = grid.set(10, 0, 2, 12, blessed.textbox, {
         label: ' Command Input (Press "i" to focus) ',
         keys: true,
-        vi: true,
+        vi: false,
         inputOnFocus: true,
         style: {
             fg: 'white',

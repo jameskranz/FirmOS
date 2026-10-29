@@ -7,6 +7,7 @@ import { fileURLToPath } from 'url';
 import { JsonStateManager } from '../state/json.js';
 import { getProjectRoot } from '../utils/path-resolver.js';
 import { MessageBroker } from '../utils/message-broker.js';
+import type { Ticket } from '../state/base.js';
 
 export class CreateTicketTool extends BaseTool {
     get definition(): ToolDefinition {
@@ -27,10 +28,9 @@ export class CreateTicketTool extends BaseTool {
     }
 
     async execute(args: { title: string, description: string, requirements?: string, parentId?: string }): Promise<string> {
-        const stateFile = path.join(getProjectRoot(), 'company', 'state', 'workflows.json');
-        const stateManager = new JsonStateManager(stateFile);
+        const stateManager = (global as any).firmOsStateManager;
 
-        const ticketId = await stateManager.createTicket({
+        const ticketId = await stateManager.tickets.create({
             title: args.title,
             description: args.description,
             requirements: args.requirements,
@@ -63,14 +63,13 @@ export class AssignTicketTool extends BaseTool {
     }
 
     async execute(args: { ticketId: string, assignedRole: string }): Promise<string> {
-        const stateFile = path.join(getProjectRoot(), 'company', 'state', 'workflows.json');
-        const stateManager = new JsonStateManager(stateFile);
+        const stateManager = (global as any).firmOsStateManager;
         const broker = new MessageBroker();
 
-        const ticket = await stateManager.getTicket(args.ticketId);
+        const ticket = await stateManager.tickets.get(args.ticketId);
         if (!ticket) throw new Error(`Ticket not found: ${args.ticketId}`);
 
-        await stateManager.updateTicket(args.ticketId, {
+        await stateManager.tickets.update(args.ticketId, {
             assignedRole: args.assignedRole,
             status: 'Open'
         });
@@ -114,7 +113,7 @@ export class UpdateTicketTool extends BaseTool {
                 properties: {
                     ticketId: { type: SchemaType.STRING, description: "The ID of the ticket to update." },
                     status: { type: SchemaType.STRING, description: "New status: 'Open', 'In Progress', 'Blocked', 'Done'." },
-                    outputArtifact: { type: SchemaType.STRING, description: "Optional: Path to the artifact produced (e.g., 'company/work/feat-prd.md')." }
+                    outputArtifact: { type: SchemaType.STRING, description: "Optional: Path to the artifact produced (relative to project root)." }
                 },
                 required: ["ticketId", "status"]
             }
@@ -122,10 +121,9 @@ export class UpdateTicketTool extends BaseTool {
     }
 
     async execute(args: { ticketId: string, status: 'Open' | 'In Progress' | 'Blocked' | 'Done', outputArtifact?: string }): Promise<string> {
-        const stateFile = path.join(getProjectRoot(), 'company', 'state', 'workflows.json');
-        const stateManager = new JsonStateManager(stateFile);
+        const stateManager = (global as any).firmOsStateManager;
 
-        await stateManager.updateTicket(args.ticketId, {
+        await stateManager.tickets.update(args.ticketId, {
             status: args.status,
             outputArtifact: args.outputArtifact
         });
@@ -157,17 +155,16 @@ export class ListTicketsTool extends BaseTool {
     }
 
     async execute(args: { parentId?: string, assignedRole?: string, status?: string }): Promise<string> {
-        const stateFile = path.join(getProjectRoot(), 'company', 'state', 'workflows.json');
-        const stateManager = new JsonStateManager(stateFile);
+        const stateManager = (global as any).firmOsStateManager;
 
-        const tickets = await stateManager.listTickets(args.parentId !== undefined ? args.parentId : null);
+        const tickets = await stateManager.tickets.list(args.parentId !== undefined ? args.parentId : null);
 
         let filtered = tickets;
         if (args.assignedRole) {
-            filtered = filtered.filter(t => t.assignedRole === args.assignedRole);
+            filtered = filtered.filter((t: Ticket) => t.assignedRole === args.assignedRole);
         }
         if (args.status) {
-            filtered = filtered.filter(t => t.status === args.status);
+            filtered = filtered.filter((t: Ticket) => t.status === args.status);
         }
 
         if (filtered.length === 0) return "No tickets found matching criteria.";

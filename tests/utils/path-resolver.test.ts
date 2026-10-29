@@ -2,8 +2,7 @@ import assert from 'node:assert';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
-// @ts-ignore
-import { getProjectRoot, validateProjectRoot } from '../../src/utils/path-resolver.js';
+import { getProjectRoot, validateProjectRoot, getArtifactsDir } from '../../src/utils/path-resolver.js';
 
 async function testPathResolver() {
     console.log('Running path-resolver.test.ts');
@@ -12,23 +11,27 @@ async function testPathResolver() {
     const originalCwd = process.cwd();
 
     try {
-        // 1. Test validation failure (no project structure)
         process.chdir(tempDir);
-        assert.throws(() => validateProjectRoot(), /FirmOS context not found/, 'Should throw if no .firmosrc');
-        console.log('✓ Validation failure test passed');
+        
+        // 1. Validation failure (no .firmosrc)
+        assert.throws(() => validateProjectRoot(), /FirmOS context not found/);
+        
+        // 2. Validation success (.firmosrc exists)
+        await fs.writeFile(path.join(tempDir, '.firmosrc'), '');
+        validateProjectRoot();
+        assert.strictEqual(getProjectRoot(), tempDir);
+        console.log('✓ Project root validation passed');
 
-        // 2. Test validation failure with ONLY conductor/ (now insufficient)
-        const conductorDir = path.join(tempDir, 'conductor');
-        await fs.mkdir(conductorDir);
-        assert.throws(() => validateProjectRoot(), /FirmOS context not found/, 'Should throw if only conductor/ exists');
-        console.log('✓ Validation failure (conductor/ only) passed');
+        // 3. Default Artifacts Dir
+        const defaultArtifacts = getArtifactsDir();
+        assert.strictEqual(defaultArtifacts, path.join(tempDir, 'artifacts'));
+        console.log('✓ Default artifacts directory passed');
 
-        // 3. Test validation success with .firmosrc
-        const firmosrcFile = path.join(tempDir, '.firmosrc');
-        await fs.writeFile(firmosrcFile, '');
-        assert.doesNotThrow(() => validateProjectRoot(), 'Should not throw if .firmosrc exists');
-        assert.strictEqual(getProjectRoot(), tempDir, 'getProjectRoot should return CWD');
-        console.log('✓ Validation success (.firmosrc) passed');
+        // 4. Overridden Artifacts Dir
+        process.env.FIRMOS_ARTIFACTS_DIR = '/tmp/custom-artifacts';
+        assert.strictEqual(getArtifactsDir(), '/tmp/custom-artifacts');
+        delete process.env.FIRMOS_ARTIFACTS_DIR;
+        console.log('✓ Overridden artifacts directory passed');
 
     } finally {
         process.chdir(originalCwd);

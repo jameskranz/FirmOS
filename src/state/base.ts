@@ -52,37 +52,90 @@ export interface CeoInteraction {
     timestamp: string;
 }
 
+export interface ArtifactReview {
+    id: string;
+    projectId: string;
+    featureId: string;
+    artifactType: string;
+    versionNumber: number;
+    contentSnapshot: string;
+    reviewerRole: string;
+    status: 'approved' | 'revisions_needed';
+    note?: string;
+    timestamp: string;
+}
+
+// --- Specialized Repositories ---
+
+export interface IWorkflowRepository {
+    initialize(state: Omit<WorkflowState, 'history' | 'updatedAt'>): Promise<void>;
+    update(featureId: string, updates: Partial<Omit<WorkflowState, 'featureId' | 'history'>>, historyEntry?: WorkflowHistoryEntry): Promise<void>;
+    get(featureId: string): Promise<WorkflowState | null>;
+    list(): Promise<WorkflowState[]>;
+}
+
+export interface ITicketRepository {
+    create(ticket: Omit<Ticket, 'id' | 'created' | 'updated' | 'status'>): Promise<string>;
+    update(ticketId: string, updates: Partial<Omit<Ticket, 'id' | 'created'>>): Promise<void>;
+    get(ticketId: string): Promise<Ticket | null>;
+    list(parentId: string | null): Promise<Ticket[]>;
+    listAll(): Promise<Ticket[]>;
+}
+
+export interface IRoleRepository {
+    upsert(role: Omit<Role, 'updatedAt'>): Promise<void>;
+    get(roleName: string): Promise<Role | null>;
+    list(): Promise<Role[]>;
+    
+    // Tier Management
+    upsertTier(tierName: string, modelName: string): Promise<void>;
+    getTier(tierName: string): Promise<string | null>;
+    listTiers(): Promise<Record<string, string>>;
+}
+
+export interface IDirectiveRepository {
+    upsert(roleName: string, content: string, updatedBy?: string, reason?: string): Promise<void>;
+    get(roleName: string): Promise<string | null>;
+    listHistory(roleName: string): Promise<any[]>;
+}
+
+export interface IReviewRepository {
+    record(featureId: string, artifactType: string, contentSnapshot: string, reviewerRole: string, status: string, note?: string): Promise<void>;
+    list(featureId: string): Promise<ArtifactReview[]>;
+    getLatestApproved(featureId: string, artifactType: string): Promise<string | null>;
+}
+
+export interface IProjectConfigRepository {
+    upsert(key: string, value: string): Promise<void>;
+    get(key: string): Promise<string | null>;
+}
+
+export interface ICeoMemoryRepository {
+    log(prompt: string, response: string): Promise<void>;
+    list(): Promise<CeoInteraction[]>;
+}
+
+export interface IAuditLogRepository {
+    log(eventType: string, eventName: string, details?: any): Promise<void>;
+    list(eventType?: string): Promise<any[]>;
+}
+
+// --- Container for all repositories ---
 export abstract class BaseStateManager {
     protected projectId: string;
-
+    
     constructor(projectId: string = 'default') {
         this.projectId = projectId;
     }
 
-    abstract initializeWorkflow(state: Omit<WorkflowState, 'history' | 'updatedAt'>): Promise<void>;
-    abstract updateWorkflow(featureId: string, updates: Partial<Omit<WorkflowState, 'featureId' | 'history'>>, historyEntry?: WorkflowHistoryEntry): Promise<void>;
-    abstract getWorkflow(featureId: string): Promise<WorkflowState | null>;
-    abstract listWorkflows(): Promise<WorkflowState[]>;
-
-    // Ticket Management
-    abstract createTicket(ticket: Omit<Ticket, 'id' | 'created' | 'updated' | 'status'>): Promise<string>;
-    abstract updateTicket(ticketId: string, updates: Partial<Omit<Ticket, 'id' | 'created'>>): Promise<void>;
-    abstract getTicket(ticketId: string): Promise<Ticket | null>;
-    abstract listTickets(parentId: string | null): Promise<Ticket[]>;
-    abstract listAllTickets(): Promise<Ticket[]>;
-
-    // Role Management
-    abstract upsertRole(role: Omit<Role, 'updatedAt'>): Promise<void>;
-    abstract getRole(roleName: string): Promise<Role | null>;
-    abstract listRoles(): Promise<Role[]>;
-
-    // CEO Memory
-    abstract logCeoInteraction(prompt: string, response: string): Promise<void>;
-    abstract listCeoInteractions(): Promise<CeoInteraction[]>;
-
-    // Directives
-    abstract upsertDirective(roleName: string, content: string): Promise<void>;
-    abstract getDirective(roleName: string): Promise<string | null>;
+    abstract workflows: IWorkflowRepository;
+    abstract tickets: ITicketRepository;
+    abstract roles: IRoleRepository;
+    abstract directives: IDirectiveRepository;
+    abstract reviews: IReviewRepository;
+    abstract config: IProjectConfigRepository;
+    abstract ceoMemory: ICeoMemoryRepository;
+    abstract auditLogs: IAuditLogRepository;
 
     // Cleanup
     abstract purgeProjectData(): Promise<void>;

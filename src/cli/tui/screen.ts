@@ -1,11 +1,20 @@
 import blessed from 'blessed';
 import { createLayout } from './layout.js';
 import { eventBus, FirmOsEvent } from '../../utils/event-bus.js';
+import { MessageBroker } from '../../utils/message-broker.js';
 
 export function startTui() {
     const screen = blessed.screen({
         smartCSR: true,
         title: 'FirmOS - AI Swarm Orchestrator'
+    });
+
+    const broker = new MessageBroker();
+    broker.subscribeToBroadcast((event, payload) => {
+        // Feed external events into the local eventBus
+        eventBus.emit(event as FirmOsEvent, payload);
+    }).catch(err => {
+        console.error('TUI failed to subscribe to events:', err.message);
     });
 
     const panels = createLayout(screen);
@@ -187,48 +196,61 @@ export function startTui() {
     panels.ticketList.clearItems();
     panels.ticketList.addItem('Loading tickets...');
 
-    // Navigation
-    screen.key(['escape', 'q', 'C-c'], () => {
-        const question = blessed.question({
+    // --- High Visibility Exit Dialog ---
+    const showExitDialog = () => {
+        const exitBox = blessed.box({
             parent: screen,
-            border: 'line',
-            height: 'shrink',
-            width: 'half',
             top: 'center',
             left: 'center',
-            label: ' Exit FirmOS ',
-            content: 'How would you like to exit?\n\n[D] Detach (Keep swarm running)\n[S] Shutdown (Stop everything)',
-            keys: true,
-            vi: true,
+            width: 60,
+            height: 10,
+            content: '\n  {center}{bold}EXIT FIRMOS{/bold}{/center}\n\n' +
+                     '  How would you like to proceed?\n\n' +
+                     '  [D] {yellow-fg}Detach{/yellow-fg} (Keep swarm running)\n' +
+                     '  [S] {red-fg}Shutdown{/red-fg} (Stop everything)\n\n' +
+                     '  [ESC/Q] Cancel',
+            tags: true,
+            border: 'line',
             style: {
                 fg: 'white',
                 bg: 'black',
-                border: { fg: 'blue' },
-                label: { fg: 'yellow' }
-            }
+                border: { fg: 'cyan' }
+            },
+            index: 1000 // Very high index
         });
 
-        question.ask('', (err, value) => {
-            // value is the string of the answer if using input, but we use hotkeys
-        });
+        // Ensure no other keys leak through
+        exitBox.focus();
 
-        // Add custom key listeners to the question box
-        question.key(['d', 'D'], () => {
+        const closeDialog = () => {
+            exitBox.destroy();
+            updateFocus(); // Return focus to the correct panel
+            screen.render();
+        };
+
+        exitBox.key(['d', 'D'], () => {
+            exitBox.destroy();
             screen.destroy();
             process.exit(0);
         });
 
-        question.key(['s', 'S'], () => {
+        exitBox.key(['s', 'S'], () => {
+            closeDialog();
             eventBus.emit(FirmOsEvent.SHUTDOWN);
         });
 
-        question.key(['escape', 'q'], () => {
-            question.destroy();
-            screen.render();
+        exitBox.key(['escape', 'q'], () => {
+            closeDialog();
         });
 
-        question.focus();
+        screen.append(exitBox);
+        exitBox.focus();
         screen.render();
+    };
+
+    // Global exit keys
+    screen.key(['escape', 'q', 'C-c'], () => {
+        showExitDialog();
     });
 
     eventBus.on(FirmOsEvent.SHUTDOWN, () => {
@@ -240,11 +262,35 @@ export function startTui() {
     const focusable = [panels.agentList, panels.ticketList, panels.hitlInbox, panels.inputBar];
     let focusIndex = 0;
 
+    function updateFocus() {
+        focusable.forEach((p, i) => {
+            const isFocused = i === focusIndex;
+            // @ts-ignore
+            if (p.style && p.style.border) {
+                // @ts-ignore
+                p.style.border.fg = isFocused ? 'cyan' : 'white';
+            }
+            if (isFocused) p.focus();
+        });
+        screen.render();
+    }
+
     screen.key(['tab'], () => {
         focusIndex = (focusIndex + 1) % focusable.length;
-        focusable[focusIndex].focus();
-        screen.render();
+        updateFocus();
     });
+
+    // Prevent inputBar from consuming Tab
+    panels.inputBar.on('element keypress', (el: any, ch: string, key: any) => {
+        if (key.name === 'tab') {
+            focusIndex = (focusIndex + 1) % focusable.length;
+            updateFocus();
+            return false;
+        }
+    });
+
+    // Initial focus
+    updateFocus();
 
     // --- Ticket Logic ---
     let allTickets: any[] = [];
@@ -345,7 +391,7 @@ REPO: ${ticket.repositoryUrl || 'N/A'}
     setInterval(refreshTickets, 10000); // Refresh every 10s
 
     // --- Input Bar Logic ---
-    screen.key(['i', 'd'], () => {
+    screen.key(['i'], () => {
         if (!panels.inputBar.focused) {
             panels.inputBar.focus();
             screen.render();

@@ -1,12 +1,7 @@
-import path from 'node:path';
-import fs from 'node:fs/promises';
 import { SchemaType } from '@google/generative-ai';
 import { BaseTool } from './base.js';
 import type { ToolDefinition } from './base.js';
 import { DirectiveUpdater } from '../utils/directive-updater.js';
-import { PostgresStateManager } from '../state/postgres.js';
-import { JsonStateManager } from '../state/json.js';
-import { getProjectRoot } from '../utils/path-resolver.js';
 
 export class UpdateDirectivesTool extends BaseTool {
     get definition(): ToolDefinition {
@@ -38,34 +33,18 @@ export class UpdateDirectivesTool extends BaseTool {
         const apiKey = process.env.GEMINI_API_KEY;
         if (!apiKey) throw new Error("GEMINI_API_KEY missing");
 
-        const root = getProjectRoot();
-        let projectId = 'default';
-        try {
-            const rcPath = path.join(root, '.firmosrc');
-            const rcContent = await fs.readFile(rcPath, 'utf8');
-            const match = rcContent.match(/project_id:\s*([a-zA-Z0-9-]+)/);
-            if (match) projectId = match[1];
-        } catch (e) {}
-
-        let state;
-        if (process.env.DATABASE_URL) {
-            state = new PostgresStateManager(projectId, process.env.DATABASE_URL);
-        } else {
-            state = new JsonStateManager(path.join(root, 'company', 'state', 'workflows.json'), projectId);
-        }
-
+        const stateManager = (global as any).firmOsStateManager;
         const updater = new DirectiveUpdater(apiKey);
+        
         try {
             await updater.updateDirectives({
                 prompt: args.context,
                 response: args.directiveSummary
-            }, args.role, state);
+            }, args.role, stateManager);
 
-            return `SUCCESS: Directives for subordinates of ${args.role} have been updated in DB and file.`;
+            return `SUCCESS: Directives for subordinates of ${args.role} have been updated in the Database.`;
         } catch (err: any) {
             throw new Error(`Failed to update directives: ${err.message}`);
-        } finally {
-            if (process.env.DATABASE_URL) await (state as any).disconnect();
         }
     }
 

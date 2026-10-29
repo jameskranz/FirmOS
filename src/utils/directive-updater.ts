@@ -1,7 +1,4 @@
-import fs from 'node:fs/promises';
-import path from 'node:path';
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { getProjectRoot } from './path-resolver.js';
 import { BaseStateManager } from '../state/base.js';
 
 export class DirectiveUpdater {
@@ -12,24 +9,14 @@ export class DirectiveUpdater {
     }
 
     async updateDirectives(interaction: { prompt: string, response: string }, managerRole: string = 'ceo', stateManager?: BaseStateManager) {
-        const root = getProjectRoot();
-        const filename = `${managerRole.replace('/', '-')}.md`;
-        const directivesPath = path.join(root, 'company', 'work', 'directives', filename);
-        
-        // 1. Get current state (prefer DB, fallback to file for init)
+        // 1. Get current state from DB
         let currentDirectives = '';
         if (stateManager) {
-            currentDirectives = await stateManager.getDirective(managerRole) || '';
+            currentDirectives = await stateManager.directives.get(managerRole) || '';
         }
 
         if (!currentDirectives) {
-            try {
-                currentDirectives = await fs.readFile(directivesPath, 'utf8');
-            } catch (e) {
-                currentDirectives = `# Directives from ${managerRole.toUpperCase()}
-
-This file contains an up-to-date summary of mandates and strategic corrections from ${managerRole}.`;
-            }
+            currentDirectives = `# Directives from ${managerRole.toUpperCase()}\n\nThis file contains an up-to-date summary of mandates and strategic corrections from ${managerRole}.`;
         }
 
         const model = this.genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
@@ -55,16 +42,17 @@ Update the directives now.`;
             const result = await model.generateContent([systemPrompt, updatePrompt]);
             const updatedContent = result.response.text().trim();
             
-            // 2. Persist to DB (Primary)
+            // 2. Persist to DB (Primary) - includes history tracking
             if (stateManager) {
-                await stateManager.upsertDirective(managerRole, updatedContent);
+                await stateManager.directives.upsert(
+                    managerRole, 
+                    updatedContent, 
+                    managerRole, 
+                    interaction.prompt // The reason/context
+                );
             }
-
-            // 3. Sync to Filesystem (for human visibility/discovery)
-            await fs.mkdir(path.dirname(directivesPath), { recursive: true });
-            await fs.writeFile(directivesPath, updatedContent);
             
-            console.log(`📝 Directives for [${managerRole}] updated successfully.`);
+            console.log(`📝 Directives for [${managerRole}] updated successfully in Database (History recorded).`);
         } catch (err: any) {
             console.error(`❌ Failed to update Directives for ${managerRole}: ${err.message}`);
         }

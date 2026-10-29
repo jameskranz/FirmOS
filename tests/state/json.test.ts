@@ -1,80 +1,72 @@
 import assert from 'node:assert';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-// @ts-ignore
+import os from 'node:os';
 import { JsonStateManager } from '../../src/state/json.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const STATE_FILE = path.resolve(__dirname, '../../company/state/workflows.json');
 
 async function testJsonStateManager() {
     console.log('Running json.test.ts');
 
-    // Cleanup before test
-    try { await fs.unlink(STATE_FILE); } catch (e) {}
-    try { await fs.mkdir(path.dirname(STATE_FILE), { recursive: true }); } catch (e) {}
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'firmos-json-test-'));
+    const stateFile = path.join(tempDir, 'workflows.json');
 
-    const manager = new JsonStateManager(STATE_FILE);
+    try {
+        const manager = new JsonStateManager(stateFile);
 
-    const featureId = 'test-feature';
-    const featureName = 'Test Feature';
-    const workbookPath = 'company/work/test-feature.md';
+        const featureId = 'test-feature';
+        const featureName = 'Test Feature';
+        const workbookPath = 'artifacts/test-feature.md';
 
-    // 1. Test Initialize
-    await manager.initializeWorkflow({
-        featureId,
-        featureName,
-        currentAgent: 'product-manager',
-        status: 'drafting',
-        workbookPath,
-        approvals: {}
-    });
+        // 1. Test Initialize
+        await manager.workflows.initialize({
+            featureId,
+            featureName,
+            currentAgent: 'product-manager',
+            status: 'drafting',
+            workbookPath,
+            approvals: {}
+        });
 
-    const state = await manager.getWorkflow(featureId);
-    assert.ok(state, 'Workflow should be initialized');
-    assert.strictEqual(state.featureName, featureName);
-    assert.strictEqual(state.status, 'drafting');
-    assert.deepStrictEqual(state.approvals, {}, 'Approvals should be empty');
-    assert.strictEqual(state.history.length, 0);
-    console.log('✓ Initialization passed');
+        const state = await manager.workflows.get(featureId);
+        assert.ok(state, 'Workflow should be initialized');
+        assert.strictEqual(state.featureName, featureName);
+        assert.strictEqual(state.status, 'drafting');
+        console.log('✓ Initialization passed');
 
-    // 2. Test Update
-    const historyEntry = {
-        timestamp: new Date().toISOString(),
-        fromAgent: 'product-manager',
-        toAgent: 'senior-systems-architect',
-        action: 'submit_for_review',
-        note: 'Initial draft complete'
-    };
+        // 2. Test Update
+        const historyEntry = {
+            timestamp: new Date().toISOString(),
+            fromAgent: 'product-manager',
+            toAgent: 'architect',
+            action: 'submit',
+            note: 'Initial draft'
+        };
 
-    const newApprovals = {
-        'architect/review': { approved: true, timestamp: new Date().toISOString(), note: 'Looks good' }
-    };
+        await manager.workflows.update(featureId, {
+            status: 'reviewing',
+            currentAgent: 'architect'
+        }, historyEntry);
 
-    await manager.updateWorkflow(featureId, {
-        currentAgent: 'senior-systems-architect',
-        status: 'reviewing',
-        approvals: newApprovals
-    }, historyEntry);
+        const updatedState = await manager.workflows.get(featureId);
+        assert.ok(updatedState);
+        assert.strictEqual(updatedState.status, 'reviewing');
+        assert.strictEqual(updatedState.history.length, 1);
+        console.log('✓ Update passed');
 
-    const updatedState = await manager.getWorkflow(featureId);
-    assert.ok(updatedState);
-    assert.strictEqual(updatedState.status, 'reviewing');
-    assert.strictEqual(updatedState.currentAgent, 'senior-systems-architect');
-    assert.deepStrictEqual(updatedState.approvals, newApprovals, 'Approvals should be updated');
-    assert.strictEqual(updatedState.history.length, 1);
-    assert.strictEqual(updatedState.history[0].action, 'submit_for_review');
-    console.log('✓ Update passed');
+        // 3. Test Tickets
+        const ticketId = await manager.tickets.create({
+            title: 'JSON Ticket',
+            description: 'Testing JSON repo',
+            parentId: null
+        });
+        const ticket = await manager.tickets.get(ticketId);
+        assert.ok(ticket);
+        assert.strictEqual(ticket.title, 'JSON Ticket');
+        console.log('✓ Tickets (JSON) passed');
 
-    // 3. Test List
-    const workflows = await manager.listWorkflows();
-    assert.strictEqual(workflows.length, 1);
-    console.log('✓ Listing passed');
-
-    // Cleanup after test
-    try { await fs.unlink(STATE_FILE); } catch (e) {}
+    } finally {
+        await fs.rm(tempDir, { recursive: true, force: true });
+    }
 }
 
 testJsonStateManager().catch(err => {

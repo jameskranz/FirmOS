@@ -1,16 +1,11 @@
-import fs from 'node:fs/promises';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { getProjectRoot } from './path-resolver.js';
+import type { BaseStateManager } from '../state/base.js';
 
 export class ModelResolver {
-    private rolesPath: string;
-    private tiersPath: string;
     private defaultModel = 'gemini-2.5-flash';
+    private stateManager?: BaseStateManager;
 
-    constructor(rolesPath?: string, tiersPath?: string) {
-        this.rolesPath = rolesPath || path.join(getProjectRoot(), 'company', 'role-models.json');
-        this.tiersPath = tiersPath || path.join(getProjectRoot(), 'company', 'model-tiers.json');
+    constructor(stateManager?: BaseStateManager) {
+        this.stateManager = stateManager;
     }
 
     async resolve(role: string, overrideModel?: string): Promise<string> {
@@ -24,48 +19,29 @@ export class ModelResolver {
             return process.env.FIRM_OS_MODEL_OVERRIDE;
         }
 
-        // 3. Registry Mapping
-        try {
-            const rolesContent = await fs.readFile(this.rolesPath, 'utf8');
-            const roleMappings = JSON.parse(rolesContent);
-
-            let resolvedTierOrModel: string | undefined;
-
-            // Hierarchical Role Lookup:
-            // a. Specific mapping (e.g., 'architect/review')
-            if (roleMappings[role]) {
-                resolvedTierOrModel = roleMappings[role];
-            }
-            // b. Family mapping (e.g., 'architect' for 'architect/review')
-            else if (role.includes('/')) {
-                const family = role.split('/')[0];
-                if (roleMappings[family]) {
-                    resolvedTierOrModel = roleMappings[family];
+        // 3. Database Resolution (Primary)
+        if (this.stateManager) {
+            try {
+                const roleData = await this.stateManager.roles.get(role);
+                // Try family if specific role not found
+                let tier = roleData?.modelTier;
+                if (!tier && role.includes('/')) {
+                    const family = role.split('/')[0];
+                    const familyRole = await this.stateManager.roles.get(family);
+                    tier = familyRole?.modelTier;
                 }
-            }
-            // c. Global default
-            if (!resolvedTierOrModel && roleMappings['default']) {
-                resolvedTierOrModel = roleMappings['default'];
-            }
 
-            if (resolvedTierOrModel) {
-                // Tier Resolution (e.g., "HIGH" -> "gemini-2.0-pro")
-                try {
-                    const tiersContent = await fs.readFile(this.tiersPath, 'utf8');
-                    const tiers = JSON.parse(tiersContent);
-                    if (tiers[resolvedTierOrModel]) {
-                        return tiers[resolvedTierOrModel];
-                    }
-                } catch (e) {
-                    // If tiers file missing or invalid, use resolvedValue as is
+                if (tier) {
+                    const model = await this.stateManager.roles.getTier(tier);
+                    if (model) return model;
+                    return tier; // If tier is actually a model name
                 }
-                return resolvedTierOrModel;
+            } catch (err: any) {
+                console.error(`DB Model Resolution failed for ${role}:`, err.message);
             }
-        } catch (error: any) {
-            // If roles file missing or invalid, fall through to default
         }
 
-        // 3. Default Fallback
+        // 4. Default Fallback
         return this.defaultModel;
     }
 }

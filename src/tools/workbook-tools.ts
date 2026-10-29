@@ -4,14 +4,14 @@ import { fileURLToPath } from 'node:url';
 import { SchemaType } from '@google/generative-ai';
 import { BaseTool } from './base.js';
 import type { ToolDefinition } from './base.js';
-import { getProjectRoot } from '../utils/path-resolver.js';
+import { getProjectRoot, getArtifactsDir } from '../utils/path-resolver.js';
 
 function getSlug(name: string): string {
     return name.toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').trim();
 }
 
 function getWorkDir(): string {
-    return path.join(getProjectRoot(), 'company', 'work');
+    return getArtifactsDir();
 }
 
 export class InitializeFeatureWorkTool extends BaseTool {
@@ -51,11 +51,11 @@ Repository: ${args.repositoryUrl || 'N/A'}
         
         await fs.writeFile(filePath, initialContent);
         console.log(`📝 Initialized workbook: ${slug}.md`);
-        return `SUCCESS: Workbook initialized. featureId='${slug}', path='company/work/${slug}.md'${args.repositoryUrl ? `, repositoryUrl='${args.repositoryUrl}'` : ''}`;
+        return `SUCCESS: Workbook initialized. featureId='${slug}', path='${path.relative(getProjectRoot(), filePath)}'${args.repositoryUrl ? `, repositoryUrl='${args.repositoryUrl}'` : ''}`;
     }
 
     get guidance(): string {
-        return "Use this tool at the very beginning of a new project or feature. It creates a dedicated Markdown workbook in 'company/work/' which will serve as the source of truth for the entire feature lifecycle. Use the returned 'featureId' for all subsequent updates.";
+        return "Use this tool at the very beginning of a new project or feature. It creates a dedicated Markdown workbook which will serve as the source of truth for the entire feature lifecycle. Use the returned 'featureId' for all subsequent updates.";
     }
 }
 

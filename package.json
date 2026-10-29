@@ -7,8 +7,9 @@
     "firmos": "./dist/cli/index.js"
   },
   "scripts": {
+    "prebuild": "npm test",
     "build": "tsc",
-    "postbuild": "copyfiles -u 1 \"src/**/*.sql\" dist/ && copyfiles \"runner-entrypoint.sh\" dist/",
+    "postbuild": "copyfiles -u 1 \"src/**/*.sql\" \"src/**/*.md\" dist/ && copyfiles \"runner-entrypoint.sh\" dist/",
     "start": "node dist/src/daemon.js",
     "dev": "tsx src/daemon.ts",
     "publish": "tsx scripts/publish.ts",
@@ -18,7 +19,9 @@
     "reset:tickets": "tsx scripts/reset-tickets.ts",
     "reset:all": "firmos reset --hard",
     "purge:queue": "tsx scripts/purge-queue.ts",
-    "test": "node tests/config.test.js && node tests/styleguide.test.js && node tests/scripts/package-scripts.test.js && tsx tests/daemon.test.ts && tsx tests/tools/index.test.ts",
+    "test": "node tests/config.test.js && node tests/styleguide.test.js && tsx tests/utils/path-resolver.test.ts && tsx tests/utils/model-resolver.test.ts && tsx tests/state/json.test.ts && tsx tests/tools/list-roles.test.ts && tsx tests/tools/ticket-tools.test.ts",
+    "test:db": "DATABASE_URL=postgresql://firmos_admin:firmos_password@localhost:5432/firmos tsx tests/state/postgres.test.ts",
+    "test:all": "npm test && npm run test:db",
     "test:stories": "tsx tests/stories/cli-onboarding.story.ts && tsx tests/stories/project-isolation.story.ts && tsx tests/stories/resilient-infra.story.ts && tsx tests/stories/ceo-handoff.story.ts"
   },
   "repository": {

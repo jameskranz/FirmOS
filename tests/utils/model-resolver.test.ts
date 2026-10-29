@@ -1,49 +1,92 @@
 import assert from 'node:assert';
-import fs from 'node:fs/promises';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-// @ts-ignore
 import { ModelResolver } from '../../src/utils/model-resolver.js';
+import { BaseStateManager, type IRoleRepository, type IWorkflowRepository, type ITicketRepository, type IDirectiveRepository, type IReviewRepository, type IProjectConfigRepository, type ICeoMemoryRepository } from '../../src/state/base.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const MODELS_FILE = path.resolve(__dirname, '../../company/models.json');
+class MockRoleRepository implements IRoleRepository {
+    public roles: Record<string, any> = {};
+    public tiers: Record<string, string> = {};
+
+    async upsert(role: any) { this.roles[role.roleName] = role; }
+    async get(roleName: string) { return this.roles[roleName] || null; }
+    async list() { return Object.values(this.roles) as any; }
+    async upsertTier(tier: string, model: string) { this.tiers[tier] = model; }
+    async getTier(tier: string) { return this.tiers[tier] || null; }
+    async listTiers() { return this.tiers; }
+}
+
+class MockStateManager extends BaseStateManager {
+    public roles: IRoleRepository;
+    public workflows = {} as IWorkflowRepository;
+    public tickets = {} as ITicketRepository;
+    public directives = {} as IDirectiveRepository;
+    public reviews = {} as IReviewRepository;
+    public config = {} as IProjectConfigRepository;
+    public ceoMemory = {} as ICeoMemoryRepository;
+
+    constructor() {
+        super('test');
+        this.roles = new MockRoleRepository();
+    }
+
+    async purgeProjectData() {}
+}
 
 async function testModelResolver() {
     console.log('Running model-resolver.test.ts');
 
-    // Setup mock models.json
-    const originalModels = await fs.readFile(MODELS_FILE, 'utf8').catch(() => null);
-    const mockModels = {
-        "test-role": "gemini-2.5-pro",
-        "default": "gemini-2.5-flash"
-    };
-    await fs.writeFile(MODELS_FILE, JSON.stringify(mockModels, null, 2));
+    // ISOLATE ENVIRONMENT
+    const originalOverride = process.env.FIRM_OS_MODEL_OVERRIDE;
+    delete process.env.FIRM_OS_MODEL_OVERRIDE;
 
     try {
-        const resolver = new ModelResolver(MODELS_FILE);
+        const state = new MockStateManager();
+        const resolver = new ModelResolver(state);
 
-        // 1. Test Ticket Override
-        const model1 = await resolver.resolve('test-role', 'gemini-3-flash');
-        assert.strictEqual(model1, 'gemini-3-flash', 'Should use ticket override');
+        // 1. Setup Mock Data
+        await state.roles.upsertTier('HIGH', 'gemini-pro-2.0');
+        await state.roles.upsert({
+            roleName: 'architect/design',
+            modelTier: 'HIGH'
+        } as any);
+
+        // 2. Test Ticket Override
+        const model1 = await resolver.resolve('architect/design', 'gemini-flash-exp');
+        assert.strictEqual(model1, 'gemini-flash-exp');
         console.log('✓ Ticket override passed');
 
-        // 2. Test Registry Mapping
-        const model2 = await resolver.resolve('test-role');
-        assert.strictEqual(model2, 'gemini-2.5-pro', 'Should use registry mapping');
-        console.log('✓ Registry mapping passed');
+        // 3. Test Database Resolution
+        const model2 = await resolver.resolve('architect/design');
+        assert.strictEqual(model2, 'gemini-pro-2.0');
+        console.log('✓ Database resolution passed');
 
-        // 3. Test Default Fallback (no mapping, no override)
-        const model3 = await resolver.resolve('unknown-role');
-        assert.strictEqual(model3, 'gemini-2.5-flash', 'Should fallback to default');
+        // 4. Test Family Fallback
+        await state.roles.upsert({
+            roleName: 'architect',
+            modelTier: 'MAX'
+        } as any);
+        await state.roles.upsertTier('MAX', 'gemini-ultra');
+        
+        const model3 = await resolver.resolve('architect/review');
+        assert.strictEqual(model3, 'gemini-ultra');
+        console.log('✓ Family fallback passed');
+
+        // 5. Test Default Fallback
+        const model4 = await resolver.resolve('unknown-role');
+        assert.strictEqual(model4, 'gemini-2.5-flash');
         console.log('✓ Default fallback passed');
 
+        // 6. Test Environment Override (Specific to this test)
+        process.env.FIRM_OS_MODEL_OVERRIDE = 'env-forced-model';
+        const model5 = await resolver.resolve('architect/design');
+        assert.strictEqual(model5, 'env-forced-model');
+        console.log('✓ Environment override passed');
+
     } finally {
-        // Restore original models.json
-        if (originalModels) {
-            await fs.writeFile(MODELS_FILE, originalModels);
+        // RESTORE ENVIRONMENT
+        if (originalOverride) {
+            process.env.FIRM_OS_MODEL_OVERRIDE = originalOverride;
         } else {
-            await fs.unlink(MODELS_FILE).catch(() => {});
+            delete process.env.FIRM_OS_MODEL_OVERRIDE;
         }
     }
 }

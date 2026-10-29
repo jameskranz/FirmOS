@@ -27,7 +27,7 @@ Feedback: ${args.feedback}
 Please revise the feature workbook and PRD as needed.`
         },
         'submit_for_approval': {
-            targetRole: 'human',
+            targetRole: 'ceo',
             nextStatus: 'pending_approval',
             promptTemplate: (args) => `APPROVAL REQUEST: Feature '${args.featureName}' (${args.featureId}) is ready for final human approval. 
 
